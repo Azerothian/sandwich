@@ -1,5 +1,5 @@
 import type Loaf from '../loaf';
-import { ILoaf } from '../loaf';
+// import { ILoaf } from '../loaf';
 // /* eslint-disable @typescript-eslint/no-explicit-any */
 export enum LoafEvent {
   Load = 'loaf:load',
@@ -57,7 +57,6 @@ export interface ISlice extends SliceEvents  {
   readonly dependencies?: (string | oneOf | DependencyInfo)[];
   readonly ignore?: string[];
   readonly allow?: string[];
-
   // readonly models?: { [key: string]: any };
 }
 

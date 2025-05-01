@@ -1,0 +1,17 @@
+{
+  "$schema": "https://swc.rs/schema.json",
+  "exclude": "node_modules/",
+  "module": {
+    "outFileExtension": "js",
+    "type": "commonjs",
+    "resolveFully": true
+  },
+  "jsc": {
+    "parser": {
+      "syntax": "typescript",
+      "tsx": true
+    },
+    "loose": true,
+    "target": "es2022"
+  }
+}

@@ -89,12 +89,16 @@ export default class Loaf extends Chains implements ILoaf {
     let sliceNames = Object.keys(this.slices);
     
     this.logger.debug(this.name, "Buttering up the toast...", sliceNames);
-    await waterfall(sliceNames, async (sliceName) => {
-      const slice = this.slices[sliceName];
 
+    sliceNames.forEach((sliceName) => {
+      const slice = this.slices[sliceName];
       if (slice.allow) {
         this.allowCrumb(...slice.allow);
       }
+    });
+
+    await waterfall(sliceNames, async (sliceName) => {
+      const slice = this.slices[sliceName];
       if (slice[LoafEvent.Load]) {
         // Execute the Load Event
         await slice[LoafEvent.Load](this, slice);

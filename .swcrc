@@ -2,14 +2,15 @@
   "$schema": "https://swc.rs/schema.json",
   "exclude": "node_modules/",
   "jsc": {
-    "target": "es2022",
+    "target": "es2024",
     "parser": {
       "syntax": "typescript"
-    }
+    },
+    "loose": false
   },
   "module": {
-    "type": "commonjs",
-    "lazy": false
-    
+    "outFileExtension": "mjs",
+    "type": "nodenext",
+    "resolveFully": true
   }
 }

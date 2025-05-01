@@ -1,25 +1,24 @@
 {
   "name": "@azerothian/sandwich",
   "version": "1.0.1",
-  "main": "lib/index.js",
+  "main": "cjs/index.js",
   "types": "lib/index.d.ts",
+  "module": "lib/index.js",
+  "type": "module",
   "scripts": {
-    "postpublish": "yalc restore --all && pnpm install",
-    "test": "jest",
-    "prepublishOnly": "pnpm run build; echo next; yalc retreat --all",
-    "build": "rm -Rf ./lib || true; run-p build:*",
-    "build:main": "swc src --out-dir lib --strip-leading-paths -s",
-    "build:types": "tsc -p tsconfig.types.json",
-    "build:copy-dts": "copyfiles -u 1 \"src/**/*.d.ts\" lib"
+    "package:yalc": "pnpm run build; cd publish; yalc publish",
+    "yalc:update": "yalc update; pnpm install",
+    "build": "rm -Rf ./publish || true; mkdir ./publish && run-s build:*",
+    "build:readme": "cp ./README.md ./publish/README.md",
+    "build:src": "copyfiles -u 1 \"src/**/*\" publish/src",
+    "build:package": "yalc retreat --all; tsx ./scripts/prepare-package.ts; yalc restore --all; pnpm install",
+    "build:main": "swc src --out-dir publish/lib --strip-leading-paths -s",
+    "build:types": "tsc -p tsconfig.types.json --outDir publish/types",
+    "build:copy-dts": "copyfiles -u 1 \"src/**/*.d.ts\" publish/lib",
+    "build:cjs": "swc src --out-dir publish/cjs --config-file=.swcrc-cjs --strip-leading-paths -s"
   },
   "files": [
-    "src/**/*",
-    "lib/**/*",
-    "!**/*.test.*",
-    "!**/*.json",
-    "CHANGELOG.md",
-    "LICENSE",
-    "README.md"
+    "**/*"
   ],
   "devDependencies": {
     "@jest/globals": "^29.7.0",
@@ -29,8 +28,10 @@
     "@types/debug": "^4.1.12",
     "@types/node": "^20.17.30",
     "copyfiles": "^2.4.1",
+    "globby": "^14.1.0",
     "jest": "^29.7.0",
     "npm-run-all2": "^6.2.6",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   },
   "dependencies": {
@@ -41,7 +42,78 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@swc/core"
+      "@swc/core",
+      "esbuild"
     ]
+  },
+  "exports": {
+    ".": {
+      "import": "./lib/index.mjs",
+      "require": "./cjs/index.js"
+    },
+    "./index": {
+      "import": "./lib/index.mjs",
+      "require": "./cjs/index.js"
+    },
+    "./kitchen": {
+      "import": "./lib/kitchen.mjs",
+      "require": "./cjs/kitchen.js"
+    },
+    "./loaf": {
+      "import": "./lib/loaf.mjs",
+      "require": "./cjs/loaf.js"
+    },
+    "./slice": {
+      "import": "./lib/slice.mjs",
+      "require": "./cjs/slice.js"
+    },
+    "./types/loaf": {
+      "import": "./lib/types/loaf.mjs",
+      "require": "./cjs/types/loaf.js"
+    },
+    "./types/utils.d": {
+      "import": "./lib/types/utils.d.mjs",
+      "require": "./cjs/types/utils.d.js"
+    },
+    "./utils/chains": {
+      "import": "./lib/utils/chains.mjs",
+      "require": "./cjs/utils/chains.js"
+    },
+    "./utils/logger": {
+      "import": "./lib/utils/logger.mjs",
+      "require": "./cjs/utils/logger.js"
+    },
+    "./utils/topo-graph": {
+      "import": "./lib/utils/topo-graph.mjs",
+      "require": "./cjs/utils/topo-graph.js"
+    },
+    "./utils/waterfall": {
+      "import": "./lib/utils/waterfall.mjs",
+      "require": "./cjs/utils/waterfall.js"
+    },
+    "./examples/basic/index": {
+      "import": "./lib/examples/basic/index.mjs",
+      "require": "./cjs/examples/basic/index.js"
+    },
+    "./examples/basic/module1": {
+      "import": "./lib/examples/basic/module1.mjs",
+      "require": "./cjs/examples/basic/module1.js"
+    },
+    "./examples/complex/index": {
+      "import": "./lib/examples/complex/index.mjs",
+      "require": "./cjs/examples/complex/index.js"
+    },
+    "./examples/complex/module1": {
+      "import": "./lib/examples/complex/module1.mjs",
+      "require": "./cjs/examples/complex/module1.js"
+    },
+    "./examples/complex/module2": {
+      "import": "./lib/examples/complex/module2.mjs",
+      "require": "./cjs/examples/complex/module2.js"
+    },
+    "./examples/complex/module3": {
+      "import": "./lib/examples/complex/module3.mjs",
+      "require": "./cjs/examples/complex/module3.js"
+    }
   }
 }
