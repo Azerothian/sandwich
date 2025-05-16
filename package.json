@@ -1,12 +1,13 @@
 {
   "name": "@azerothian/sandwich",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "cjs/index.js",
   "types": "lib/index.d.ts",
   "module": "lib/index.js",
   "type": "module",
   "scripts": {
     "package:yalc": "pnpm run build; cd publish; yalc publish",
+    "package:npm": "pnpm run build; cd publish; npm publish --access public",
     "yalc:update": "yalc update; pnpm install",
     "build": "rm -Rf ./publish || true; mkdir ./publish && run-s build:*",
     "build:readme": "cp ./README.md ./publish/README.md",
