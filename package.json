@@ -1,6 +1,6 @@
 {
   "name": "@azerothian/sandwich",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "main": "cjs/index.js",
   "types": "lib/index.d.ts",
   "module": "lib/index.js",
@@ -45,75 +45,5 @@
       "@swc/core",
       "esbuild"
     ]
-  },
-  "exports": {
-    ".": {
-      "import": "./lib/index.mjs",
-      "require": "./cjs/index.js"
-    },
-    "./index": {
-      "import": "./lib/index.mjs",
-      "require": "./cjs/index.js"
-    },
-    "./kitchen": {
-      "import": "./lib/kitchen.mjs",
-      "require": "./cjs/kitchen.js"
-    },
-    "./loaf": {
-      "import": "./lib/loaf.mjs",
-      "require": "./cjs/loaf.js"
-    },
-    "./slice": {
-      "import": "./lib/slice.mjs",
-      "require": "./cjs/slice.js"
-    },
-    "./types/loaf": {
-      "import": "./lib/types/loaf.mjs",
-      "require": "./cjs/types/loaf.js"
-    },
-    "./types/utils.d": {
-      "import": "./lib/types/utils.d.mjs",
-      "require": "./cjs/types/utils.d.js"
-    },
-    "./utils/chains": {
-      "import": "./lib/utils/chains.mjs",
-      "require": "./cjs/utils/chains.js"
-    },
-    "./utils/logger": {
-      "import": "./lib/utils/logger.mjs",
-      "require": "./cjs/utils/logger.js"
-    },
-    "./utils/topo-graph": {
-      "import": "./lib/utils/topo-graph.mjs",
-      "require": "./cjs/utils/topo-graph.js"
-    },
-    "./utils/waterfall": {
-      "import": "./lib/utils/waterfall.mjs",
-      "require": "./cjs/utils/waterfall.js"
-    },
-    "./examples/basic/index": {
-      "import": "./lib/examples/basic/index.mjs",
-      "require": "./cjs/examples/basic/index.js"
-    },
-    "./examples/basic/module1": {
-      "import": "./lib/examples/basic/module1.mjs",
-      "require": "./cjs/examples/basic/module1.js"
-    },
-    "./examples/complex/index": {
-      "import": "./lib/examples/complex/index.mjs",
-      "require": "./cjs/examples/complex/index.js"
-    },
-    "./examples/complex/module1": {
-      "import": "./lib/examples/complex/module1.mjs",
-      "require": "./cjs/examples/complex/module1.js"
-    },
-    "./examples/complex/module2": {
-      "import": "./lib/examples/complex/module2.mjs",
-      "require": "./cjs/examples/complex/module2.js"
-    },
-    "./examples/complex/module3": {
-      "import": "./lib/examples/complex/module3.mjs",
-      "require": "./cjs/examples/complex/module3.js"
-    }
   }
 }
