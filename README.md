@@ -16,14 +16,30 @@
 ```
 ## Description
 
-Sandwich is an execution framework for TypeScript/JavaScript based environments. 
+Sandwich is an execution framework for TypeScript/JavaScript based environments.
+
+## Installation
+
+```bash
+npm install @azerothian/sandwich
+```
+
+Or with pnpm:
+```bash
+pnpm add @azerothian/sandwich
+```
+
+Or with yarn:
+```bash
+yarn add @azerothian/sandwich
+```
 
 ### A basic example
 ```typescript
 
 // module1.ts
-import Loaf from "../../loaf";
-import { ISlice } from "../../types/loaf";
+import Loaf from "@azerothian/sandwich";
+import { ISlice } from "@azerothian/sandwich";
 
 const module1: ISlice = {
   name: "module1",
@@ -46,11 +62,11 @@ export default module1;
 ```typescript
 // index.ts - Loader
 
-import Loaf from "../../loaf";
+import Loaf from "@azerothian/sandwich";
 
 const instance = new Loaf({
   name: "projectName",
-  modules: ["./module1.ts"],
+  slices: ["./module1.ts"],
 });
 
 await instance.start();
@@ -72,8 +88,8 @@ Using multiple slices with a dependency system you can assemble dynamic and comp
 
 ```typescript
 // module1.ts
-import Loaf from "../../loaf";
-import { ISlice } from "../../types/loaf";
+import Loaf from "@azerothian/sandwich";
+import { ISlice } from "@azerothian/sandwich";
 
 export enum NewEvents { 
   Initialize = "module1:initialize", // the text needs to be unique
@@ -112,7 +128,7 @@ export default module1;
 
 ```typescript
 // module2.ts
-import Loaf from "../../loaf";
+import Loaf from "@azerothian/sandwich";
 import { NewEvents } from "./module1";
 
 export default {
@@ -136,7 +152,7 @@ export default {
 
 ```typescript
 // module3.ts
-import Loaf from "../../loaf";
+import Loaf from "@azerothian/sandwich";
 import { NewEvents } from "./module1";
 
 export default {
@@ -155,7 +171,7 @@ export default {
 ```typescript
 
 // index.ts - Loader
-import Loaf from "../../loaf";
+import Loaf from "@azerothian/sandwich";
 import { URL } from 'url'; // in Browser, the URL in native accessible on window
 
 const __dirname = new URL('.', import.meta.url).pathname;
@@ -185,3 +201,8 @@ Console Output
 Loaf - the execution engine
 Slice - a module
 Jam - the config
+
+## Links
+
+- [Full Documentation](docs/specifications.md)
+- [Examples Directory](examples/)
