@@ -31,6 +31,7 @@ export default class Loaf extends Chains implements ILoaf {
   crumbs: {[key: string]: string[]} = {};
   private allowCrumbNames: string[] = [];
   private restrictedCrumbNames: string[] = [];
+  private uncaughtExceptionHandler?: (error: Error) => Promise<void>;
   constructor(jam: Jam) {
     super();
     this.name = "loaf";
@@ -69,9 +70,9 @@ export default class Loaf extends Chains implements ILoaf {
     });
   }
   readonly restrictCrumb = (...crumbNames: string[]) => {
-    this.restrictedCrumbNames = [].concat(this.restrictedCrumbNames, [crumbNames.filter((name) => {
+    this.restrictedCrumbNames.push(...crumbNames.filter((name) => {
       return this.restrictedCrumbNames.indexOf(name) === -1;
-    })]);
+    }));
   }
   readonly unrestrictCrumb = (...crumbNames: string[]) => {
     this.restrictedCrumbNames = this.restrictedCrumbNames.filter((name) => {
@@ -170,9 +171,12 @@ export default class Loaf extends Chains implements ILoaf {
         throw error;
       }
     }
-    process.on("uncaughtException", async (error) => {
-      await this.execute(LoafEvent.UncaughtError, this, error);
-    });
+    if (!this.uncaughtExceptionHandler) {
+      this.uncaughtExceptionHandler = async (error) => {
+        await this.execute(LoafEvent.UncaughtError, this, error);
+      };
+      process.on("uncaughtException", this.uncaughtExceptionHandler);
+    }
   };
   readonly ready = async () => {
     try {
@@ -181,6 +185,7 @@ export default class Loaf extends Chains implements ILoaf {
       try {
         this.logger.error(this.name, error);
         await this.execute(LoafEvent.UncaughtError, this, error);
+        throw error;
       } catch (error: any) {
         this.logger.error(
           this.name,
@@ -193,6 +198,10 @@ export default class Loaf extends Chains implements ILoaf {
   };
   readonly shutdown = async () => {
     await this.execute(LoafEvent.Shutdown, this);
+    if (this.uncaughtExceptionHandler) {
+      process.off("uncaughtException", this.uncaughtExceptionHandler);
+      this.uncaughtExceptionHandler = undefined;
+    }
   };
   readonly get = <T>(sliceName: string) => {
     return this.slices[sliceName] as T;

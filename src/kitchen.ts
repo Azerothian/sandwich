@@ -121,19 +121,19 @@ export function sortArrayByDependencyInfo(moduleNames: string[], dependencyInfos
     g.addVertex(newModuleNames.indexOf(mname));
   }
   for (const depInfo of filtered) {
-    const before = [...depInfo.requiredBefore, ...depInfo.optionalBefore.filter((o) => moduleNames.indexOf(o) !== -1)];
-    const after = [...depInfo.requiredAfter, ...depInfo.optionalAfter.filter((o) => moduleNames.indexOf(o) !== -1)];
+    const before = resolveNames([...depInfo.requiredBefore, ...depInfo.optionalBefore], moduleNames);
+    const after = resolveNames([...depInfo.requiredAfter, ...depInfo.optionalAfter], moduleNames);
     const currentIdx = newModuleNames.indexOf(depInfo.moduleName);
     if (before.length > 0) {
       before.forEach((e) => {
-        const beforeIdx = newModuleNames.indexOf(e as string);
+        const beforeIdx = newModuleNames.indexOf(e);
         logger.debug(` before - ${newModuleNames[beforeIdx]} -> ${newModuleNames[currentIdx]}`)
         g.addEdge(beforeIdx, currentIdx);
       });
     }
     if (after.length > 0) {
       after.forEach((e) => {
-        const afterIdx = newModuleNames.indexOf(e as string);
+        const afterIdx = newModuleNames.indexOf(e);
         logger.debug(` after - ${newModuleNames[currentIdx]} -> ${newModuleNames[afterIdx]}`)
         g.addEdge(currentIdx, afterIdx);
       });
@@ -161,6 +161,19 @@ export function sortArrayByDependencyInfo(moduleNames: string[], dependencyInfos
 
   return sortedModules
 
+}
+// expands oneOf entries to the options that are present and drops missing modules
+function resolveNames(entries: (string | oneOf)[], moduleNames: string[]): string[] {
+  const names: string[] = [];
+  for (const e of entries) {
+    const options = typeof e === "string" ? [e] : e.oneOf;
+    for (const o of options) {
+      if (moduleNames.indexOf(o) !== -1 && names.indexOf(o) === -1) {
+        names.push(o);
+      }
+    }
+  }
+  return names;
 }
 function convertAdjacencyListToNamed(adjacencyList: Map<number, number[]>, moduleNames: string[]) : Map<string, string[]> {
   const result = new Map<string, string[]>();

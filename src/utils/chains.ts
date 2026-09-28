@@ -51,14 +51,11 @@ export default class Chains {
     }
     const options = chains.options[eventName];
     return chains.funcs[eventName].reduce((o, f) => {
-      if (f instanceof Promise) {
+      const result = f(options?.ignoreReturn ? start : o, ...args);
+      if (result instanceof Promise || typeof result?.then === 'function') {
         throw new Error('Cannot use sync with async functions');
       }
-      if (options?.ignoreReturn) {
-        f(start, ...args);
-        return start;
-      }
-      return f(o, ...args);
+      return options?.ignoreReturn ? start : result;
     }, start);
   };
   readonly all = async<T>(eventName: string, start: any, ...args: readonly unknown[]): Promise<T[]> => {

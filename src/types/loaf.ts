@@ -32,11 +32,11 @@ export type DependencyInfo = {
   moduleName?: string;
   event?: string;
   required?: {
-    before?: (string)[];
-    after?: (string)[];
+    before?: (string | oneOf)[];
+    after?: (string | oneOf)[];
     // if required & incompatible it will throw an error
     incompatible?: (string)[]
-  } | (string)[];
+  } | (string | oneOf)[];
   optional?: {
     before?: (string)[];
     after?: (string)[];
