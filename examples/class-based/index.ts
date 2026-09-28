@@ -34,6 +34,7 @@ class AuthSlice extends Slice {
   private currentUser: string | null = null;
   private sessions: Map<string, Date> = new Map();
 
+  // `loaf` is undefined here: Loaf calls the constructor with no arguments
   constructor(loaf: Loaf) {
     super(loaf);
   }
@@ -203,10 +204,12 @@ async function main() {
   const loaf = new Loaf({
     name: "class-based-app",
     slices: [
-      // Pass loaf instance to create slice instances
-      new ConfigSlice(loaf),
-      new AuthSlice(loaf),
-      new ApiSlice(loaf)
+      // Pass the classes - Loaf instantiates each one with `new SliceClass()`.
+      // No constructor arguments are passed, so use the `loaf` handler
+      // argument (or a buildSlice(loaf) factory) when you need the loaf.
+      ConfigSlice,
+      AuthSlice,
+      ApiSlice
     ],
     crumbNames: Object.values(AuthEvents),
     devMode: false

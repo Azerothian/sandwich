@@ -6,6 +6,7 @@
   "module": "lib/index.js",
   "type": "module",
   "scripts": {
+    "test": "jest",
     "package:yalc": "pnpm run build; cd publish; yalc publish",
     "package:npm": "pnpm run build; cd publish; npm publish --access public",
     "yalc:update": "yalc update; pnpm install",

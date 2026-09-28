@@ -50,6 +50,50 @@ This directory contains practical examples demonstrating how to use the Sandwich
 
 ---
 
+### 5. Error Handling (`error-handling/`)
+**What it demonstrates:**
+- `UncaughtError` handlers running when a lifecycle handler throws
+- `start()` rejecting with the original error
+- Cleaning up with `shutdown()` after a failed start
+- Wiring `UnhandledRejection` manually
+
+**Best for:** Making startup failures observable and recoverable
+
+---
+
+### 6. Dependency Constraints (`dependency-constraints/`)
+**What it demonstrates:**
+- `oneOf` alternatives (ordered after every option that is loaded)
+- `optional.before` / `optional.after` with present and absent modules
+- `required.after` to run before another slice
+- Event-scoped constraints
+- Catching `AdjacencyError` from a circular dependency
+
+**Best for:** Understanding exactly how execution order is resolved
+
+---
+
+### 7. Crumb Control (`crumb-control/`)
+**What it demonstrates:**
+- Enabling crumbs with `jam.crumbNames`, `slice.allow` and `allowCrumb()`
+- Blocking crumbs with `restrictCrumb()`, `ignore` and `disallowCrumb()`
+- Execution modes: `execute`, `ignoreReturn`, `all`, `condition` and `sync`
+
+**Best for:** Building custom event pipelines
+
+---
+
+### 8. Module Loading (`module-loading/`)
+**What it demonstrates:**
+- Loading slices from relative and absolute file paths
+- Class slices (instantiated with no constructor arguments)
+- `buildSlice(loaf)` factories
+- `clone: true` to isolate shared slice objects
+
+**Best for:** Splitting an application into files and packages
+
+---
+
 ## Running the Examples
 
 Each example is self-contained in its own directory with an `index.ts` file.
@@ -86,14 +130,25 @@ Functions that execute in response to events. Core events include:
 Custom events can be defined for your specific application needs.
 
 ### Dependencies
-Control the execution order of slices for specific events:
+Control the execution order of slices:
 - `dependencies: ["slice1"]` - Run after slice1 (for all events)
-- Event-specific: `{ event: "custom:event", required: { after: ["slice1"] } }`
+- `{ required: { before: ["slice1"] } }` - slice1 runs **before** this slice
+- `{ required: { after: ["slice1"] } }` - slice1 runs **after** this slice
+- `{ oneOf: ["a", "b"] }` - At least one must be loaded; runs after every one that is
+- `{ optional: { before: [...], after: [...] } }` - Same, but ignored if the slice is absent
+- Event-specific: `{ event: "custom:event", required: { before: ["slice1"] } }` - only changes that event's order
+
+### Handler Arguments
+Handlers are called as `(previousValue, ...extraArgs, slice)` with `this` bound to the slice.
+For lifecycle events the first handler receives the loaf; each later handler receives
+whatever the previous one returned. `Load` is the exception - it gets `(loaf, slice)` and its
+return value is ignored.
 
 ## Key Patterns
 
-1. **Always return loaf** from lifecycle events
+1. **Always return loaf** from lifecycle events - the next slice receives your return value
 2. **Use descriptive names** for custom events (e.g., "database:connect")
 3. **Define event types** for better IDE autocomplete
-4. **Handle errors** in Initialize and Ready events
-5. **Clean up resources** in Shutdown event
+4. **Handle errors** - `start()` rejects if Initialize or Ready throws; call `shutdown()` to clean up
+5. **Clean up resources** in Shutdown event (runs in dependency order, not reversed)
+6. **Pass classes, not instances** - Loaf constructs them with no arguments

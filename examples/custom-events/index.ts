@@ -62,7 +62,7 @@ const cacheSlice: ISlice = {
     {
       event: CustomEvents.DatabaseConnect,
       required: {
-        after: ["database"] // Run after database for this specific event
+        before: ["database"] // database runs before cache for this event only
       }
     }
   ],
@@ -122,7 +122,8 @@ const apiSlice: ISlice = {
     // Simulate processing some data through multiple slices
     console.log("\n[API] Simulating data processing chain...");
 
-    // Execute the ProcessData event - it will flow through database -> cache -> api
+    // Execute the ProcessData event. The DatabaseConnect constraint does not
+    // apply here, so this chain uses the default order: cache -> database -> api
     const result = await loaf.execute(CustomEvents.ProcessData, "user-request-123", loaf);
 
     console.log(`[API] Final result: "${result}"\n`);
@@ -165,11 +166,11 @@ main().catch(console.error);
  *
  * === Starting Custom Events Example ===
  *
+ * [Cache] Initializing cache...
  * [Database] Connecting to database...
  *   [Database] Establishing connection pool...
  *   [Cache] Connecting to Redis...
  * [Database] Database initialized
- * [Cache] Initializing cache...
  * [API] Setting up API routes...
  * [Cache] Starting cache warmup...
  *   [Cache] Warming up cache with hot data...
@@ -177,16 +178,17 @@ main().catch(console.error);
  * [API] API server ready
  *
  * [API] Simulating data processing chain...
- *   [Database] Processing data: "user-request-123"
- *   [Cache] Caching data: "user-request-123 -> saved to DB"
- *   [API] Sending response: "user-request-123 -> saved to DB -> cached"
- * [API] Final result: "user-request-123 -> saved to DB -> cached -> sent to client"
+ *   [Cache] Caching data: "user-request-123"
+ *   [Database] Processing data: "user-request-123 -> cached"
+ *   [API] Sending response: "user-request-123 -> cached -> saved to DB"
+ * [API] Final result: "user-request-123 -> cached -> saved to DB -> sent to client"
  *
  * === Example complete ===
  *
  * Key Takeaways:
  * 1. Custom events flow through slices in dependency order
  * 2. Data can be transformed as it flows through the chain
- * 3. Event-specific dependencies give fine-grained control
+ * 3. Event-specific dependencies give fine-grained control: cache runs after
+ *    database for DatabaseConnect only, while other events keep the default order
  * 4. execute() returns the final value from the event chain
  */

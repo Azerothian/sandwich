@@ -38,8 +38,7 @@ yarn add @azerothian/sandwich
 ```typescript
 
 // module1.ts
-import Loaf from "@azerothian/sandwich";
-import { ISlice } from "@azerothian/sandwich";
+import { Loaf, ISlice } from "@azerothian/sandwich";
 
 const module1: ISlice = {
   name: "module1",
@@ -62,7 +61,7 @@ export default module1;
 ```typescript
 // index.ts - Loader
 
-import Loaf from "@azerothian/sandwich";
+import { Loaf } from "@azerothian/sandwich";
 
 const instance = new Loaf({
   name: "projectName",
@@ -88,8 +87,7 @@ Using multiple slices with a dependency system you can assemble dynamic and comp
 
 ```typescript
 // module1.ts
-import Loaf from "@azerothian/sandwich";
-import { ISlice } from "@azerothian/sandwich";
+import { Loaf, ISlice } from "@azerothian/sandwich";
 
 export enum NewEvents { 
   Initialize = "module1:initialize", // the text needs to be unique
@@ -128,7 +126,7 @@ export default module1;
 
 ```typescript
 // module2.ts
-import Loaf from "@azerothian/sandwich";
+import { Loaf } from "@azerothian/sandwich";
 import { NewEvents } from "./module1";
 
 export default {
@@ -152,7 +150,7 @@ export default {
 
 ```typescript
 // module3.ts
-import Loaf from "@azerothian/sandwich";
+import { Loaf } from "@azerothian/sandwich";
 import { NewEvents } from "./module1";
 
 export default {
@@ -171,7 +169,7 @@ export default {
 ```typescript
 
 // index.ts - Loader
-import Loaf from "@azerothian/sandwich";
+import { Loaf } from "@azerothian/sandwich";
 import { URL } from 'url'; // in Browser, the URL in native accessible on window
 
 const __dirname = new URL('.', import.meta.url).pathname;
@@ -196,13 +194,61 @@ Console Output
 [module1](NewEvents.Initialize) - execute(NewEvents.RandomFunction) - result module2
 ```
 
+### Error handling
+
+If an `Initialize` or `Ready` handler throws, every slice's `UncaughtError` handler runs and then the original error is rethrown, so `start()` rejects. Slices that already started are not shut down for you:
+
+```typescript
+import { Loaf } from "@azerothian/sandwich";
+
+const instance = new Loaf({
+  name: "projectName",
+  slices: [
+    {
+      name: "reporter",
+      [Loaf.UncaughtError]: async (loaf: Loaf, error: Error) => {
+        console.error("startup failed:", error.message);
+        return loaf;
+      },
+    },
+    "./module1.ts",
+  ],
+});
+
+try {
+  await instance.start();
+} catch (error) {
+  await instance.shutdown();
+  process.exitCode = 1;
+}
+```
+
+Things to know:
+- Lifecycle and crumb handlers are chained: each receives the previous handler's return value first, so always `return loaf` from lifecycle handlers.
+- `allowCrumb`, `disallowCrumb`, `restrictCrumb` and `unrestrictCrumb` must be called before `load()`/`start()`.
+- `UnhandledRejection` is not wired automatically; forward it with `process.on("unhandledRejection", (e) => loaf.execute(Loaf.UnhandledRejection, loaf, e))`.
+
 ## Terms
 
 Loaf - the execution engine
 Slice - a module
 Jam - the config
 
+## Testing
+
+```bash
+pnpm test
+```
+
 ## Links
 
 - [Full Documentation](docs/specifications.md)
 - [Examples Directory](examples/)
+  - [Basic App](examples/basic-app/index.ts)
+  - [Custom Events](examples/custom-events/index.ts)
+  - [Class-Based Slices](examples/class-based/index.ts)
+  - [Graceful Shutdown](examples/graceful-shutdown/index.ts)
+  - [Error Handling](examples/error-handling/index.ts)
+  - [Dependency Constraints](examples/dependency-constraints/index.ts)
+  - [Crumb Control](examples/crumb-control/index.ts)
+  - [Module Loading](examples/module-loading/index.ts)

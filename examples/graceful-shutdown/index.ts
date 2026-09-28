@@ -141,7 +141,9 @@ const errorHandlerSlice: ISlice = {
     return loaf;
   },
 
-  // Handle unhandled promise rejections
+  // Handle unhandled promise rejections. Loaf does not listen for
+  // "unhandledRejection" itself - forward it with
+  // process.on("unhandledRejection", (e) => loaf.execute(Loaf.UnhandledRejection, loaf, e))
   [Loaf.UnhandledRejection]: async (loaf: Loaf, error: Error, slice: ISlice) => {
     console.error("[ErrorHandler] ⚠️  Unhandled rejection:", error.message);
     // Log to error tracking service, send alerts, etc.

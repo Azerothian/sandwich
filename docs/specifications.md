@@ -96,7 +96,7 @@ export type Jam = {
 - `name` - Identifier for the Loaf instance
 - `slices` - Array of modules to load (file paths, objects, or classes)
 - `logger` - Optional custom logger (defaults to debug-based logger)
-- `allowInCompat` - Whether to allow incompatible dependencies
+- `allowInCompat` - Reserved; currently ignored (incompatible constraints are not implemented)
 - `cwd` - Working directory for resolving relative paths
 - `devMode` - Enables additional debugging output
 - `clone` - Whether to clone module objects (prevents shared state)
@@ -144,6 +144,19 @@ export enum LoafEvent {
 }
 ```
 
+### Handler Call Contract
+
+Every lifecycle handler and custom crumb handler is called the same way:
+
+```typescript
+handler.call(slice, previousValue, ...args, slice)
+```
+
+- `this` is bound to the slice, and the slice is always passed as the **last** argument.
+- For `Initialize`, `Ready`, `Shutdown`, `UncaughtError` and custom crumbs, handlers run as a **waterfall**: the first argument is the return value of the previous handler in the chain (the first handler receives the loaf). This is why lifecycle handlers must `return loaf` - a handler that returns nothing passes `undefined` to the next slice.
+- `Load` is different: it is called directly as `(loaf, slice)` for each slice in **slices-array order**, before any sorting, and its return value is ignored.
+- `Initialize`, `Ready` and `Shutdown` all run in the same dependency order (dependencies first). Shutdown is **not** reversed.
+
 ### Event Descriptions
 
 #### 1. Load (`loaf:load`)
@@ -156,9 +169,10 @@ export enum LoafEvent {
 ```
 
 **Use Cases:**
-- Register additional crumbs dynamically
 - Perform early setup that other slices may depend on
 - Configure crumb allowances
+
+> **Note:** crumbs are collected slice-by-slice immediately after each slice's `Load` handler runs. A crumb allowed with `loaf.allowCrumb()` inside `Load` is therefore only picked up for that slice and the slices after it in the array. Prefer `jam.crumbNames` or `slice.allow` for crumbs that every slice should see.
 
 **Example:**
 ```typescript
@@ -253,7 +267,12 @@ const dbSlice: ISlice = {
 
 #### 5. UncaughtError (`loaf:error`)
 
-**Purpose:** Handle uncaught errors during execution.
+**Purpose:** Handle errors thrown by `Initialize` or `Ready` handlers, and uncaught process exceptions after `initialize()` has completed.
+
+**Behaviour:**
+- If an `Initialize` or `Ready` handler throws, the remaining handlers for that event are skipped, the `UncaughtError` chain runs with `(loaf, error)`, and the **original error is then rethrown** - so `initialize()`, `ready()` and `start()` reject.
+- If an `UncaughtError` handler itself throws, that error is rethrown instead.
+- After a successful `initialize()`, Loaf registers a single `process.on("uncaughtException")` listener that runs this chain. It is registered once per Loaf and removed by `shutdown()`.
 
 **Signature:**
 ```typescript
@@ -289,6 +308,14 @@ const errorHandler: ISlice = {
 
 **Use Cases:**
 - Similar to UncaughtError but specifically for promise rejections
+
+> **Note:** Loaf does **not** listen for `unhandledRejection` itself - this event only runs when you execute it. Wire it up explicitly:
+>
+> ```typescript
+> process.on("unhandledRejection", (reason) => {
+>   loaf.execute(Loaf.UnhandledRejection, loaf, reason);
+> });
+> ```
 
 ### SliceEvents Type
 
@@ -344,7 +371,12 @@ const mySlice: ISlice = {
 };
 ```
 
-This means `cache` requires at least one of the three cache backends.
+This means `cache` requires at least one of the three cache backends:
+
+- If **none** are loaded, `load()` throws `Missing at least one of the required dependencies - redis, memcached, in-memory`.
+- `cache` is ordered after **every** listed backend that is loaded; backends that are not loaded are ignored.
+
+`oneOf` can also be used inside `DependencyInfo.required` (both the array form and `before`/`after`).
 
 #### 3. DependencyInfo Objects
 
@@ -355,10 +387,10 @@ export type DependencyInfo = {
   moduleName?: string;
   event?: string;
   required?: {
-    before?: string[];
-    after?: string[];
+    before?: (string | oneOf)[];
+    after?: (string | oneOf)[];
     incompatible?: string[];
-  } | string[];
+  } | (string | oneOf)[];
   optional?: {
     before?: string[];
     after?: string[];
@@ -370,12 +402,13 @@ export type DependencyInfo = {
 **Properties:**
 - `moduleName` - The name of the module this constraint applies to (defaults to slice name)
 - `event` - Apply this constraint only for a specific event/crumb
-- `required.before` - Modules that must execute before this one
-- `required.after` - Modules that must execute after this one
-- `required.incompatible` - Modules that cannot be present (throws error)
+- `required` (array form) - Shorthand for `required.before`
+- `required.before` - Modules that must execute before this one (missing modules throw)
+- `required.after` - Modules that must execute after this one (missing modules throw)
+- `required.incompatible` - Reserved; **not implemented** (currently ignored)
 - `optional.before` - Modules that should execute before if present
 - `optional.after` - Modules that should execute after if present
-- `optional.incompatible` - Modules that will be filtered out if present
+- `optional.incompatible` - Reserved; **not implemented** (currently ignored)
 
 ### Dependency Constraint Types
 
@@ -415,7 +448,9 @@ Execution order: `logger` → `api-server` / `worker`
 
 #### Incompatible Constraints
 
-**Required Incompatible:** Throws an error if specified modules are present.
+> **Not implemented.** The `incompatible` fields (and `Jam.allowInCompat`) are accepted by the types but are currently ignored at runtime - no error is thrown and no slice is filtered out. The examples below show the intended design only.
+
+**Required Incompatible (planned):** Throw an error if specified modules are present.
 
 ```typescript
 const mySlice: ISlice = {
@@ -428,7 +463,7 @@ const mySlice: ISlice = {
 };
 ```
 
-**Optional Incompatible:** Silently filters out the slice if specified modules are present.
+**Optional Incompatible (planned):** Silently filter out the slice if specified modules are present.
 
 ```typescript
 const mySlice: ISlice = {
@@ -455,12 +490,14 @@ const mySlice: ISlice = {
     {
       event: "process:data",
       required: {
-        after: ["validator"]
+        before: ["validator"]
       }
     }
   ]
 };
 ```
+
+Event-scoped constraints only affect the order of that event's chain. Their `required` modules are still checked for presence during `load()`, regardless of event.
 
 ### Topological Sorting
 
@@ -583,6 +620,17 @@ readonly start: () => Promise<void>
 
 Convenience method that executes the full startup sequence: `load()` → `initialize()` → `ready()`.
 
+Rejects if any step fails (see [UncaughtError](#5-uncaughterror-loaferror)). Slices that already initialized are not cleaned up automatically, so call `shutdown()` yourself:
+
+```typescript
+try {
+  await loaf.start();
+} catch (error) {
+  await loaf.shutdown();
+  throw error;
+}
+```
+
 **Example:**
 ```typescript
 await loaf.start();
@@ -598,10 +646,12 @@ Loads all slices, builds dependency graph, and creates crumb execution paths.
 
 **Internal Steps:**
 1. Import and create Toast objects
-2. Execute `Load` events
-3. Extract dependency information
+2. Execute `Load` events (in slices-array order)
+3. Extract dependency information and collect allowed crumbs
 4. Perform topological sort
 5. Build crumb execution chains
+
+**Rejects when:** a slice cannot be loaded (`Could not load module … at index N in slices array`), a required dependency is missing, a `Load` handler throws, or the dependencies contain a cycle (`AdjacencyError`).
 
 ##### initialize()
 
@@ -609,7 +659,7 @@ Loads all slices, builds dependency graph, and creates crumb execution paths.
 readonly initialize: () => Promise<void>
 ```
 
-Executes the `Initialize` event chain. Sets up uncaught exception handlers.
+Executes the `Initialize` event chain. If a handler throws, runs the `UncaughtError` chain and rethrows the original error. On success, registers a single `uncaughtException` listener that runs the `UncaughtError` chain (only once per Loaf, however many times `initialize()` is called).
 
 ##### ready()
 
@@ -617,7 +667,7 @@ Executes the `Initialize` event chain. Sets up uncaught exception handlers.
 readonly ready: () => Promise<void>
 ```
 
-Executes the `Ready` event chain. Application is fully initialized after this.
+Executes the `Ready` event chain. Application is fully initialized after this. If a handler throws, runs the `UncaughtError` chain and rethrows the original error.
 
 ##### shutdown()
 
@@ -625,7 +675,7 @@ Executes the `Ready` event chain. Application is fully initialized after this.
 readonly shutdown: () => Promise<void>
 ```
 
-Executes the `Shutdown` event chain for graceful cleanup.
+Executes the `Shutdown` event chain for graceful cleanup (in dependency order, same as `Initialize`), then removes the `uncaughtException` listener registered by `initialize()`. Rejects if a `Shutdown` handler throws.
 
 **Example:**
 ```typescript
@@ -641,7 +691,7 @@ process.on('SIGTERM', async () => {
 readonly get: <T>(sliceName: string) => T
 ```
 
-Retrieve a loaded slice by name with type casting.
+Retrieve a loaded slice by name with type casting. Returns `undefined` for unknown names.
 
 **Example:**
 ```typescript
@@ -659,7 +709,7 @@ await db.query("SELECT * FROM users");
 readonly allowCrumb: (...crumbNames: string[]) => void
 ```
 
-Dynamically allow additional crumb names.
+Allow additional crumb names. Like all allow/restrict methods, this only affects crumb chains built by a **later** `load()` call - call it before `load()`/`start()`.
 
 **Example:**
 ```typescript
@@ -672,7 +722,7 @@ loaf.allowCrumb("user:login", "user:logout");
 readonly disallowCrumb: (...crumbNames: string[]) => void
 ```
 
-Remove crumb names from the allow list.
+Remove crumb names from the allow list (before `load()`). This can also remove built-in lifecycle events, e.g. `loaf.disallowCrumb(Loaf.Ready)`.
 
 ##### restrictCrumb()
 
@@ -680,7 +730,7 @@ Remove crumb names from the allow list.
 readonly restrictCrumb: (...crumbNames: string[]) => void
 ```
 
-Globally restrict crumbs from executing.
+Globally restrict crumbs from being registered, even if they are allowed. Must be called before `load()`; a restricted crumb has no chain, so executing it simply returns the start value.
 
 **Example:**
 ```typescript
@@ -694,7 +744,7 @@ loaf.restrictCrumb("admin:delete-all");
 readonly unrestrictCrumb: (...crumbNames: string[]) => void
 ```
 
-Remove crumbs from the restrict list.
+Remove crumbs from the restrict list (before `load()`).
 
 ### Slice Class
 
@@ -706,11 +756,13 @@ constructor(loaf: Loaf)
 
 Base class for implementing Slices.
 
+> **Note:** when you pass a class in `jam.slices`, Loaf instantiates it with `new MySlice()` - **no arguments are passed**, so `loaf` (and `this.loaf`) is `undefined` in the constructor. Use the `loaf` argument passed to each handler, or a [`buildSlice(loaf)` factory](#5-buildslice-factory-pattern) when you need the loaf during construction.
+
 **Example:**
 ```typescript
 export default class MySlice extends Slice {
-  constructor(loaf: Loaf) {
-    super(loaf);
+  constructor() {
+    super(undefined as unknown as Loaf);
     this.name = 'my-slice';
   }
 
@@ -735,10 +787,10 @@ export interface ISlice extends SliceEvents {
 ```
 
 **Properties:**
-- `name` - Unique identifier for the slice
+- `name` - Unique identifier for the slice. Slices without a name get a random UUID; a later slice with the same name silently replaces an earlier one
 - `dependencies` - Dependency constraints
 - `ignore` - Array of crumb names this slice should not execute
-- `allow` - Array of additional crumb names this slice enables
+- `allow` - Array of additional crumb names this slice enables (for **all** slices, not just this one)
 
 ### Kitchen Utilities
 
@@ -880,7 +932,7 @@ During the `load()` phase, Sandwich:
 const mySlice: ISlice = {
   name: "public-api",
   ignore: ["admin:delete", "internal:debug"],
-  "user:login": async (loaf, data) => {
+  "user:login": async (data) => {
     // This slice handles user:login
   }
   // But it will never execute admin:delete or internal:debug
@@ -890,17 +942,19 @@ const mySlice: ISlice = {
 #### Global Restrictions
 
 ```typescript
-// Restrict globally - no slice can execute this
+// Restrict globally before load() - no slice registers this crumb
 loaf.restrictCrumb("dangerous:operation");
+await loaf.start();
 
-// Later, if needed
-loaf.unrestrictCrumb("dangerous:operation");
+await loaf.execute("dangerous:operation", input); // returns `input` untouched
 ```
+
+Restrictions (and `unrestrictCrumb()`) are applied when `load()` builds the crumb chains; changing them afterwards has no effect on the current Loaf.
 
 #### Allowance Control
 
 ```typescript
-// Only allowed crumbs can be registered
+// Only allowed crumbs can be registered - call before load()
 loaf.allowCrumb("new:feature");
 
 // Remove from allow list
@@ -933,7 +987,8 @@ export enum UserEvents {
 // Slice 1: Auth handler
 const authSlice: ISlice = {
   name: "auth",
-  [UserEvents.Login]: async (loaf, credentials) => {
+  // Crumb handlers receive (previousValue, ...extraArgs, slice)
+  [UserEvents.Login]: async (credentials) => {
     console.log("Auth: validating credentials");
     return { valid: true, token: "xyz" };
   }
@@ -944,9 +999,9 @@ const loggerSlice: ISlice = {
   name: "logger",
   dependencies: [{
     event: UserEvents.Login,
-    required: { after: ["auth"] }
+    required: { before: ["auth"] } // auth runs before logger
   }],
-  [UserEvents.Login]: async (loaf, authResult) => {
+  [UserEvents.Login]: async (authResult) => {
     console.log("Logger: user logged in", authResult);
     return authResult;
   }
@@ -957,9 +1012,9 @@ const analyticsSlice: ISlice = {
   name: "analytics",
   dependencies: [{
     event: UserEvents.Login,
-    required: { after: ["logger"] }
+    required: { before: ["logger"] } // logger runs before analytics
   }],
-  [UserEvents.Login]: async (loaf, authResult) => {
+  [UserEvents.Login]: async (authResult) => {
     console.log("Analytics: tracking login");
     return authResult;
   }
@@ -1004,7 +1059,7 @@ Each function receives the return value of the previous function.
 const result = loaf.sync("custom:event", startValue, ...args);
 ```
 
-Synchronous version. Throws error if any function is async.
+Synchronous version. Throws `Cannot use sync with async functions` as soon as a function returns a Promise (that function has already started running).
 
 #### all() - Parallel
 
@@ -1095,7 +1150,7 @@ sync<T>(
 ): T
 ```
 
-Synchronous version of `execute()`. Throws error if any function returns a Promise.
+Synchronous version of `execute()`. Throws `Cannot use sync with async functions` if any function returns a Promise (or thenable). The check happens after the function is called, so an async function will already have started.
 
 **Example:**
 ```typescript
@@ -1312,8 +1367,8 @@ const loaf = new Loaf({
 
 ```typescript
 class AuthModule extends Slice {
-  constructor(loaf: Loaf) {
-    super(loaf);
+  constructor() {
+    super(undefined as unknown as Loaf); // Loaf passes no constructor arguments
     this.name = "auth";
   }
 
@@ -1329,7 +1384,7 @@ const loaf = new Loaf({
 });
 ```
 
-**Note:** Classes are instantiated automatically with `new mod()`.
+**Note:** Classes are instantiated automatically with `new mod()` - no arguments are passed. Anything with a `prototype` (including plain `function`s) is treated as a class.
 
 #### 5. buildSlice Factory Pattern
 
@@ -1383,7 +1438,7 @@ When loading a module, `buildToast()` follows this logic:
    - Use directly (or clone if `jam.clone === true`)
 
 5. **Enrich to Toast**
-   - Add `id` (from `name` or generate UUID)
+   - Add `id` (from `name` or generate UUID); duplicate ids overwrite earlier slices
    - Extract `dependencyInfos`
    - Return Toast object
 
@@ -1393,7 +1448,7 @@ For ESM modules using `import.meta.url`:
 
 ```typescript
 import { URL } from 'url';
-import Loaf from '@azerothian/sandwich';
+import { Loaf } from '@azerothian/sandwich';
 
 const __dirname = new URL('.', import.meta.url).pathname;
 
@@ -1412,7 +1467,7 @@ const loaf = new Loaf({
 For CommonJS modules:
 
 ```typescript
-const Loaf = require('@azerothian/sandwich').default;
+const { Loaf } = require('@azerothian/sandwich');
 
 const loaf = new Loaf({
   name: "app",
@@ -1467,8 +1522,7 @@ publish/
 #### ESM (Modern)
 
 ```typescript
-import Loaf from '@azerothian/sandwich';
-import { ISlice, LoafEvent } from '@azerothian/sandwich/types/loaf';
+import { Loaf, ISlice, LoafEvent } from '@azerothian/sandwich';
 ```
 
 **Resolution:**
@@ -1478,8 +1532,7 @@ import { ISlice, LoafEvent } from '@azerothian/sandwich/types/loaf';
 #### CommonJS (Legacy)
 
 ```javascript
-const Loaf = require('@azerothian/sandwich').default;
-const { LoafEvent } = require('@azerothian/sandwich/types/loaf');
+const { Loaf, LoafEvent } = require('@azerothian/sandwich');
 ```
 
 **Resolution:**
@@ -1489,8 +1542,8 @@ const { LoafEvent } = require('@azerothian/sandwich/types/loaf');
 #### TypeScript
 
 ```typescript
-import Loaf from '@azerothian/sandwich';
-import type { ISlice, Jam, Toast } from '@azerothian/sandwich/types/loaf';
+import { Loaf } from '@azerothian/sandwich';
+import type { ISlice, Jam, Toast } from '@azerothian/sandwich';
 ```
 
 **Resolution:**
@@ -1566,32 +1619,26 @@ pnpm run package:yalc
 
 ## Complete Example
 
-Here's a comprehensive example demonstrating all major features:
+Here's a comprehensive example demonstrating all major features. The slices are deliberately listed in reverse order - dependencies fix the execution order.
 
 ```typescript
 // types.ts
-import { LoafEvent } from '@azerothian/sandwich/types/loaf';
-
 export enum AppEvents {
   ProcessData = "app:process-data",
   SendNotification = "app:notify"
 }
 
 // logger.slice.ts
-import Loaf from '@azerothian/sandwich';
-import { ISlice } from '@azerothian/sandwich/types/loaf';
+import { Loaf, ISlice } from '@azerothian/sandwich';
 
 export const loggerSlice: ISlice = {
   name: "logger",
-  [Loaf.Load]: async (loaf, slice) => {
-    // Allow our custom events
-    loaf.allowCrumb(AppEvents.ProcessData, AppEvents.SendNotification);
-  },
-  [Loaf.Initialize]: async (loaf, slice) => {
+  [Loaf.Initialize]: async (loaf: Loaf) => {
     console.log("[Logger] Initialized");
     return loaf;
   },
-  [AppEvents.ProcessData]: async (loaf, data, slice) => {
+  // Crumb handlers receive (previousValue, ...extraArgs, slice)
+  [AppEvents.ProcessData]: async (data: any) => {
     console.log("[Logger] Processing:", data);
     return data;
   }
@@ -1601,11 +1648,11 @@ export const loggerSlice: ISlice = {
 export const databaseSlice: ISlice = {
   name: "database",
   dependencies: ["logger"],
-  [Loaf.Initialize]: async (loaf, slice) => {
+  [Loaf.Initialize]: async (loaf: Loaf) => {
     console.log("[Database] Connected");
     return loaf;
   },
-  [Loaf.Shutdown]: async (loaf, slice) => {
+  [Loaf.Shutdown]: async (loaf: Loaf) => {
     console.log("[Database] Disconnected");
     return loaf;
   }
@@ -1616,21 +1663,16 @@ export const processorSlice: ISlice = {
   name: "processor",
   dependencies: [
     "database",
-    {
-      event: AppEvents.ProcessData,
-      required: {
-        after: ["logger"]
-      }
-    }
+    // For ProcessData only: logger runs before processor
+    { event: AppEvents.ProcessData, required: { before: ["logger"] } }
   ],
-  [Loaf.Ready]: async (loaf, slice) => {
-    // Trigger data processing
-    await loaf.execute(AppEvents.ProcessData, { id: 1, value: "test" });
+  [Loaf.Ready]: async (loaf: Loaf) => {
+    // Pass the loaf as an extra argument so handlers can execute other crumbs
+    await loaf.execute(AppEvents.ProcessData, { id: 1, value: "test" }, loaf);
     return loaf;
   },
-  [AppEvents.ProcessData]: async (loaf, data, slice) => {
+  [AppEvents.ProcessData]: async (data: any) => {
     console.log("[Processor] Handling:", data);
-    // Modify data
     return { ...data, processed: true };
   }
 };
@@ -1639,43 +1681,37 @@ export const processorSlice: ISlice = {
 export const notifierSlice: ISlice = {
   name: "notifier",
   dependencies: [
-    {
-      event: AppEvents.ProcessData,
-      required: {
-        after: ["processor"]
-      }
-    }
+    // For ProcessData only: processor runs before notifier
+    { event: AppEvents.ProcessData, required: { before: ["processor"] } }
   ],
-  [AppEvents.ProcessData]: async (loaf, data, slice) => {
+  [AppEvents.ProcessData]: async (data: any, loaf: Loaf) => {
     console.log("[Notifier] Sending notification for:", data);
     await loaf.execute(AppEvents.SendNotification, data);
     return data;
   },
-  [AppEvents.SendNotification]: async (loaf, data, slice) => {
+  [AppEvents.SendNotification]: async (data: any) => {
     console.log("[Notifier] Email sent for:", data.id);
+    return data;
   }
 };
 
 // index.ts
-import Loaf from '@azerothian/sandwich';
+import { Loaf } from '@azerothian/sandwich';
 import { loggerSlice, databaseSlice, processorSlice, notifierSlice } from './slices';
 
 const loaf = new Loaf({
   name: "data-processor-app",
-  slices: [
-    loggerSlice,
-    databaseSlice,
-    processorSlice,
-    notifierSlice
-  ],
-  devMode: true,
+  slices: [notifierSlice, processorSlice, databaseSlice, loggerSlice],
   crumbNames: [AppEvents.ProcessData, AppEvents.SendNotification]
 });
 
-// Start the application
-await loaf.start();
+try {
+  await loaf.start();
+} catch (error) {
+  await loaf.shutdown();
+  throw error;
+}
 
-// Graceful shutdown
 process.on('SIGTERM', async () => {
   await loaf.shutdown();
   process.exit(0);
@@ -1727,7 +1763,7 @@ export interface IPlugin extends ISlice {
 }
 
 // plugin-loader.ts
-export async function loadPlugins(pluginDir: string): Promise<IPlugin[]> {
+export async function loadPlugins(pluginDir: string): Promise<string[]> {
   const files = await fs.readdir(pluginDir);
   return files.map(file => path.join(pluginDir, file));
 }
@@ -1754,11 +1790,14 @@ const apiSlice: ISlice = {
     const endpoints = ["user:create", "user:update", "user:delete"];
     loaf.allowCrumb(...endpoints);
   },
-  "user:create": async (loaf, data, slice) => {
+  "user:create": async (data, slice) => {
     // Handle user creation
+    return data;
   }
 };
 ```
+
+This works for the `api` slice itself and any slices listed after it; see the [Load note](#1-load-loafload). Prefer `jam.crumbNames` or `allow` when every slice needs the crumb.
 
 ### Middleware Pattern
 
@@ -1767,9 +1806,9 @@ const middlewareSlice: ISlice = {
   name: "middleware",
   dependencies: [{
     event: "http:request",
-    required: { before: ["router"] }
+    required: { after: ["router"] } // middleware runs before router
   }],
-  "http:request": async (loaf, req, slice) => {
+  "http:request": async (req, slice) => {
     // Add middleware functionality
     req.startTime = Date.now();
     return req;
@@ -1778,7 +1817,7 @@ const middlewareSlice: ISlice = {
 
 const routerSlice: ISlice = {
   name: "router",
-  "http:request": async (loaf, req, slice) => {
+  "http:request": async (req, slice) => {
     // Route the request
     console.log("Request took:", Date.now() - req.startTime);
     return req;
