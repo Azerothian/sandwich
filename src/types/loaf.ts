@@ -1,4 +1,3 @@
-import type Loaf from '../loaf';
 // import { ILoaf } from '../loaf';
 // /* eslint-disable @typescript-eslint/no-explicit-any */
 export enum LoafEvent {
@@ -10,19 +9,14 @@ export enum LoafEvent {
   UnhandledRejection = 'loaf:error:rejected-fly',
 }
 
+// handlers get the loaf and slice from useLoaf()/useSlice(); return values are ignored
 export type SliceEvents = {
-  readonly [LoafEvent.Load]?: (loaf: Loaf, slice: ISlice)  => Promise<void>;
-  readonly [LoafEvent.Initialize]?: (loaf: Loaf, slice: ISlice) => Promise<Loaf>;
-  readonly [LoafEvent.Ready]?: (loaf: Loaf, slice: ISlice) => Promise<Loaf>;
-  readonly [LoafEvent.Shutdown]?: (loaf: Loaf, slice: ISlice) => Promise<Loaf>;
-  readonly [LoafEvent.UncaughtError]?: (
-    loaf: Loaf,
-    error: Error
-  ) => Promise<Loaf>;
-  readonly [LoafEvent.UnhandledRejection]?: (
-    loaf: Loaf,
-    error: Error
-  ) => Promise<Loaf>;
+  readonly [LoafEvent.Load]?: () => Promise<void> | void;
+  readonly [LoafEvent.Initialize]?: () => Promise<void> | void;
+  readonly [LoafEvent.Ready]?: () => Promise<void> | void;
+  readonly [LoafEvent.Shutdown]?: () => Promise<void> | void;
+  readonly [LoafEvent.UncaughtError]?: (error: Error) => Promise<void> | void;
+  readonly [LoafEvent.UnhandledRejection]?: (reason: unknown) => Promise<void> | void;
 };
 export interface SliceFunctionIterable {
   [key: string]: any;
@@ -32,11 +26,11 @@ export type DependencyInfo = {
   moduleName?: string;
   event?: string;
   required?: {
-    before?: (string)[];
-    after?: (string)[];
+    before?: (string | oneOf)[];
+    after?: (string | oneOf)[];
     // if required & incompatible it will throw an error
     incompatible?: (string)[]
-  } | (string)[];
+  } | (string | oneOf)[];
   optional?: {
     before?: (string)[];
     after?: (string)[];
@@ -48,6 +42,22 @@ export type DependencyInfo = {
 
 
 export type oneOf = { oneOf: string[] };
+
+// before/after may be async; returning undefined leaves the value unchanged
+export type HookFunction = (value: any, ...args: any[]) => any;
+
+export interface SliceHookHandlers {
+  // runs before the slice's handler; the result replaces the handler's first argument
+  before?: HookFunction;
+  // runs after the slice's handler; the result replaces the handler's return value
+  after?: HookFunction;
+  // slices to target; all slices when omitted
+  sliceNames?: string[];
+}
+
+export type ISliceHook = {
+  [eventName: string]: SliceHookHandlers;
+};
 
 
 
@@ -77,6 +87,7 @@ export type Jam = {
   devMode?: boolean;
   clone?: boolean
   crumbNames?: string[];
+  hooks?: ISliceHook[];
 };
 
 export type Logger = {

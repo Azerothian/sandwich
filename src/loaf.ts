@@ -1,8 +1,28 @@
 import Chains from "./utils/chains";
 import waterfall from "./utils/waterfall";
-import { Jam, LoafEvent, Slices, ISlice, oneOf, Logger, Toast, DependencyInfo } from "./types/loaf";
+import { Jam, LoafEvent, Slices, ISlice, oneOf, Logger, Toast, DependencyInfo, ISliceHook, HookFunction } from "./types/loaf";
 import { createDebugLogger } from "./utils/logger";
 import { importAndCreateToast, sortArrayByDependencyInfo } from "./kitchen";
+import { annotateError, getContext, PathFrame, runInContext } from "./context";
+import { chainStorage, isThenable } from "./utils/chain-control";
+
+// calls fn with the result, staying synchronous unless value is a promise
+function then<T, R>(value: T | PromiseLike<T>, fn: (value: T) => R): R | PromiseLike<R> {
+  return isThenable(value) ? value.then(fn) : fn(value as T);
+}
+
+// annotates sync throws and async rejections with the slice path
+function guard<T>(path: PathFrame[], fn: () => T): T {
+  try {
+    const result = fn();
+    if (isThenable(result)) {
+      return result.then(undefined, (error) => { throw annotateError(error, path); }) as T;
+    }
+    return result;
+  } catch (error) {
+    throw annotateError(error, path);
+  }
+}
 
 export interface ILoaf {
   slices: Slices;
@@ -31,6 +51,8 @@ export default class Loaf extends Chains implements ILoaf {
   crumbs: {[key: string]: string[]} = {};
   private allowCrumbNames: string[] = [];
   private restrictedCrumbNames: string[] = [];
+  private uncaughtExceptionHandler?: (error: Error) => Promise<void>;
+  private hooks: ISliceHook[] = [];
   constructor(jam: Jam) {
     super();
     this.name = "loaf";
@@ -38,10 +60,14 @@ export default class Loaf extends Chains implements ILoaf {
     this.cwd = jam.cwd || process.cwd();
     this.logger = jam.logger || createDebugLogger(jam);
     this.slices = {};
-    this.setOptions(LoafEvent.Load, {
-      ignoreReturn: true,
-    });
+    // lifecycle handlers get their context from useLoaf()/useSlice(), so return values are ignored
+    for (const eventName of Object.values(LoafEvent)) {
+      this.setOptions(eventName, {
+        ignoreReturn: true,
+      });
+    }
     this.allowCrumbNames = [...Object.values(LoafEvent), ...jam.crumbNames || []];
+    this.hooks = [...jam.hooks || []];
     
   }
   static Load: LoafEvent.Load = LoafEvent.Load;
@@ -69,13 +95,58 @@ export default class Loaf extends Chains implements ILoaf {
     });
   }
   readonly restrictCrumb = (...crumbNames: string[]) => {
-    this.restrictedCrumbNames = [].concat(this.restrictedCrumbNames, [crumbNames.filter((name) => {
+    this.restrictedCrumbNames.push(...crumbNames.filter((name) => {
       return this.restrictedCrumbNames.indexOf(name) === -1;
-    })]);
+    }));
   }
   readonly unrestrictCrumb = (...crumbNames: string[]) => {
     this.restrictedCrumbNames = this.restrictedCrumbNames.filter((name) => {
       return crumbNames.indexOf(name) === -1;
+    });
+  }
+
+  readonly addHook = (hook: ISliceHook) => {
+    this.hooks.push(hook);
+    return () => this.removeHook(hook);
+  }
+  readonly removeHook = (hook: ISliceHook) => {
+    this.hooks = this.hooks.filter((h) => h !== hook);
+  }
+
+  // hooks are looked up per call so hooks added after load() still apply
+  private hookFunctions(eventName: string, sliceName: string, phase: "before" | "after"): HookFunction[] {
+    return this.hooks
+      .map((hook) => hook[eventName])
+      .filter((h) => h?.[phase] && (!h.sliceNames || h.sliceNames.includes(sliceName)))
+      .map((h) => h[phase]);
+  }
+
+  // runs a slice handler with its context, hooks, chain control and error path
+  private invoke(eventName: string, sliceName: string, slice: Toast, args: any[]) {
+    const path: PathFrame[] = [...getContext()?.path || [], { event: eventName, slice: sliceName }];
+    const control = chainStorage.getStore();
+    const current = [...args];
+    const runHooks = (phase: "before" | "after", funcs: HookFunction[], value: any, index = 0): any => {
+      if (index >= funcs.length || (phase === "before" && control?.action)) {
+        return value;
+      }
+      const hookPath = [...path.slice(0, -1), { event: eventName, slice: sliceName, phase }];
+      const result = runInContext({ loaf: this, slice, path: hookPath }, () => {
+        return guard(hookPath, () => funcs[index].apply(slice, [value, ...current.slice(1)]));
+      });
+      return then(result, (r) => runHooks(phase, funcs, r === undefined ? value : r, index + 1));
+    };
+    return runInContext({ loaf: this, slice, path }, () => {
+      const before = runHooks("before", this.hookFunctions(eventName, sliceName, "before"), current[0]);
+      return then(before, (first) => {
+        current[0] = first;
+        // a before hook cancelled, skipped or redirected - the handler does not run
+        if (control?.action) {
+          return first;
+        }
+        const result = guard(path, () => slice[eventName].apply(slice, current));
+        return then(result, (r) => runHooks("after", this.hookFunctions(eventName, sliceName, "after"), r));
+      });
     });
   }
 
@@ -101,7 +172,7 @@ export default class Loaf extends Chains implements ILoaf {
       const slice = this.slices[sliceName];
       if (slice[LoafEvent.Load]) {
         // Execute the Load Event
-        await slice[LoafEvent.Load](this, slice);
+        await chainStorage.exit(() => this.invoke(LoafEvent.Load, sliceName, slice, []));
       }
       if (slice.dependencyInfos) {
         dependencyInfos = dependencyInfos.concat(slice.dependencyInfos);
@@ -140,18 +211,17 @@ export default class Loaf extends Chains implements ILoaf {
         const mod = this.slices[sliceName];
         if (mod[crumbName]) {
           if (this.jam.devMode) {
-            this.push(crumbName, (...args) => {
+            funcs.push(Object.assign((...args) => {
               this.logger.debug(`${sliceName}.${crumbName}`, args);
               if(args.length > 0) {
                 return args[0];
               }
               return undefined;
-            });
+            }, { sliceName }));
           }
           this.logger.debug(`Adding crumb ${crumbName} from slice ${sliceName}`);
-          funcs.push((...args) => {
-            return mod[crumbName].apply(mod, [...args, mod]);
-          });
+          // sliceName lets redirect({ slice }) find this function in the chain
+          funcs.push(Object.assign((...args) => this.invoke(crumbName, sliceName, mod, args), { sliceName }));
         }
       }
       this.push(crumbName, funcs);
@@ -159,28 +229,32 @@ export default class Loaf extends Chains implements ILoaf {
   };
   readonly initialize = async () => {
     try {
-      await this.execute(LoafEvent.Initialize, this);
+      await this.execute(LoafEvent.Initialize);
     } catch (error: any) {
       try {
         this.logger.error(this.name, error);
-        await this.execute(LoafEvent.UncaughtError, this, error);
+        await this.execute(LoafEvent.UncaughtError, error);
         throw error;
       } catch (error: any) {
         this.logger.error(`[UncaughtError] ${error?.message}`, error);
         throw error;
       }
     }
-    process.on("uncaughtException", async (error) => {
-      await this.execute(LoafEvent.UncaughtError, this, error);
-    });
+    if (!this.uncaughtExceptionHandler) {
+      this.uncaughtExceptionHandler = async (error) => {
+        await this.execute(LoafEvent.UncaughtError, error);
+      };
+      process.on("uncaughtException", this.uncaughtExceptionHandler);
+    }
   };
   readonly ready = async () => {
     try {
-      await this.execute(LoafEvent.Ready, this);
+      await this.execute(LoafEvent.Ready);
     } catch (error: any) {
       try {
         this.logger.error(this.name, error);
-        await this.execute(LoafEvent.UncaughtError, this, error);
+        await this.execute(LoafEvent.UncaughtError, error);
+        throw error;
       } catch (error: any) {
         this.logger.error(
           this.name,
@@ -192,7 +266,11 @@ export default class Loaf extends Chains implements ILoaf {
     }
   };
   readonly shutdown = async () => {
-    await this.execute(LoafEvent.Shutdown, this);
+    await this.execute(LoafEvent.Shutdown);
+    if (this.uncaughtExceptionHandler) {
+      process.off("uncaughtException", this.uncaughtExceptionHandler);
+      this.uncaughtExceptionHandler = undefined;
+    }
   };
   readonly get = <T>(sliceName: string) => {
     return this.slices[sliceName] as T;

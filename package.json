@@ -1,11 +1,12 @@
 {
   "name": "@azerothian/sandwich",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "main": "cjs/index.js",
   "types": "lib/index.d.ts",
   "module": "lib/index.js",
   "type": "module",
   "scripts": {
+    "test": "jest",
     "package:yalc": "pnpm run build; cd publish; yalc publish",
     "package:npm": "pnpm run build; cd publish; npm publish --access public",
     "yalc:update": "yalc update; pnpm install",
@@ -17,6 +18,9 @@
     "build:types": "tsc -p tsconfig.types.json --outDir publish/types",
     "build:copy-dts": "copyfiles -u 1 \"src/**/*.d.ts\" publish/lib",
     "build:cjs": "swc src --out-dir publish/cjs --config-file=.swcrc-cjs --strip-leading-paths -s"
+  },
+  "engines": {
+    "node": ">=16.4.0"
   },
   "files": [
     "**/*"
