@@ -6,9 +6,8 @@ export default {
   buildSlice: (loaf: Loaf) => ({
     name: "factory-slice",
     appName: loaf.jam.name,
-    [Loaf.Initialize]: async (l: Loaf) => {
+    [Loaf.Initialize]: async () => {
       console.log(`  [factory-slice] initialized (built for "${loaf.jam.name}")`);
-      return l;
     },
   }),
 };

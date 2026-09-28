@@ -15,11 +15,11 @@ import { AdjacencyError } from "../../src/utils/topo-graph";
 
 const order: string[] = [];
 
-// Helper that records when a slice initializes
+// Helper that records when a slice initializes.
+// Lifecycle handlers take no arguments and their return values are ignored.
 function track(name: string) {
-  return async (loaf: Loaf) => {
+  return async () => {
     order.push(name);
-    return loaf;
   };
 }
 

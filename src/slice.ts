@@ -1,22 +1,18 @@
-import Loaf from "./loaf";
-import { ISlice, LoafEvent, oneOf } from "./types/loaf";
+import { DependencyInfo, ISlice, LoafEvent, oneOf } from "./types/loaf";
 
-
+// Loaf instantiates slice classes with no arguments; use useLoaf()/useSlice() inside handlers.
 export default class Slice implements ISlice {
-  loaf: Loaf;
   name: string;
-  dependencies?: (string | oneOf)[];
+  dependencies?: (string | oneOf | DependencyInfo)[];
   incompatible?: (string | oneOf)[];
   ignoreFunctions?: string[];
-  [LoafEvent.Load]?: (core: Loaf) => Promise<void>;
-  [LoafEvent.Initialize]?: <T extends Loaf>(loaf: T, slice: ISlice) => Promise<T>;
-  [LoafEvent.Ready]?: <T extends Loaf>(core: T) => Promise<T>;
-  [LoafEvent.Shutdown]?: <T extends Loaf>(core: T) => Promise<T>;
-  [LoafEvent.UncaughtError]?: <T extends Loaf>(core: T, error: Error) => Promise<T>;
-  [LoafEvent.UnhandledRejection]?: <T extends Loaf>(core: T, error: Error) => Promise<T>;
-  constructor(loaf: Loaf) {
-    this.loaf = loaf;
+  [LoafEvent.Load]?: () => Promise<void> | void;
+  [LoafEvent.Initialize]?: () => Promise<void> | void;
+  [LoafEvent.Ready]?: () => Promise<void> | void;
+  [LoafEvent.Shutdown]?: () => Promise<void> | void;
+  [LoafEvent.UncaughtError]?: (error: Error) => Promise<void> | void;
+  [LoafEvent.UnhandledRejection]?: (reason: unknown) => Promise<void> | void;
+  constructor() {
     this.name = 'rye';
   }
 }
-  

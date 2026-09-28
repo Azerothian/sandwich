@@ -10,7 +10,11 @@
  */
 
 import Loaf from "../../src/loaf";
+import { useLoaf } from "../../src/context";
 import { ISlice } from "../../src/types/loaf";
+
+// ISlice only declares lifecycle events; allow custom crumb handlers too
+type CrumbSlice = ISlice & { [crumb: string]: unknown };
 
 // Define custom event names
 // These are strings that identify your custom events
@@ -21,32 +25,30 @@ enum CustomEvents {
 }
 
 // Define the database slice
-const databaseSlice: ISlice = {
+const databaseSlice: CrumbSlice = {
   name: "database",
 
   // Allow these custom events to be executed
   // This tells Loaf that these event names are valid
   allow: [CustomEvents.DatabaseConnect, CustomEvents.ProcessData],
 
-  [Loaf.Initialize]: async (loaf: Loaf) => {
+  [Loaf.Initialize]: async () => {
     console.log("[Database] Connecting to database...");
 
     // Trigger custom event - all slices with DatabaseConnect will execute
-    await loaf.execute(CustomEvents.DatabaseConnect, loaf);
+    await useLoaf().execute(CustomEvents.DatabaseConnect);
 
     console.log("[Database] Database initialized");
-    return loaf;
   },
 
   // Custom event handler for database connection
-  [CustomEvents.DatabaseConnect]: async (loaf: Loaf) => {
+  [CustomEvents.DatabaseConnect]: async () => {
     console.log("  [Database] Establishing connection pool...");
-    return loaf;
   },
 
   // Custom event handler for data processing
   // This demonstrates passing data through the chain
-  [CustomEvents.ProcessData]: async (data: string, loaf: Loaf) => {
+  [CustomEvents.ProcessData]: async (data: string) => {
     console.log(`  [Database] Processing data: "${data}"`);
     // Transform and return data for the next slice
     return data + " -> saved to DB";
@@ -54,7 +56,7 @@ const databaseSlice: ISlice = {
 };
 
 // Define the cache slice
-const cacheSlice: ISlice = {
+const cacheSlice: CrumbSlice = {
   name: "cache",
 
   // This slice depends on database for the DatabaseConnect event only
@@ -69,41 +71,37 @@ const cacheSlice: ISlice = {
 
   allow: [CustomEvents.DatabaseConnect, CustomEvents.CacheWarmup, CustomEvents.ProcessData],
 
-  [Loaf.Initialize]: async (loaf: Loaf) => {
+  [Loaf.Initialize]: async () => {
     console.log("[Cache] Initializing cache...");
-    return loaf;
   },
 
   // This will run AFTER database's DatabaseConnect handler
-  [CustomEvents.DatabaseConnect]: async (loaf: Loaf) => {
+  [CustomEvents.DatabaseConnect]: async () => {
     console.log("  [Cache] Connecting to Redis...");
-    return loaf;
   },
 
-  [Loaf.Ready]: async (loaf: Loaf) => {
+  [Loaf.Ready]: async () => {
     console.log("[Cache] Starting cache warmup...");
 
     // Trigger another custom event
-    await loaf.execute(CustomEvents.CacheWarmup, loaf);
+    await useLoaf().execute(CustomEvents.CacheWarmup);
 
     console.log("[Cache] Cache is ready");
-    return loaf;
   },
 
-  [CustomEvents.CacheWarmup]: async (loaf: Loaf) => {
+  [CustomEvents.CacheWarmup]: async () => {
     console.log("  [Cache] Warming up cache with hot data...");
-    return loaf;
   },
 
   // Add caching layer to data processing
-  [CustomEvents.ProcessData]: async (data: string, loaf: Loaf) => {
+  [CustomEvents.ProcessData]: async (data: string) => {
     console.log(`  [Cache] Caching data: "${data}"`);
     return data + " -> cached";
   }
 };
 
 // Define the API slice
-const apiSlice: ISlice = {
+const apiSlice: CrumbSlice = {
   name: "api",
 
   // Depends on both database and cache
@@ -111,12 +109,11 @@ const apiSlice: ISlice = {
 
   allow: [CustomEvents.ProcessData],
 
-  [Loaf.Initialize]: async (loaf: Loaf) => {
+  [Loaf.Initialize]: async () => {
     console.log("[API] Setting up API routes...");
-    return loaf;
   },
 
-  [Loaf.Ready]: async (loaf: Loaf) => {
+  [Loaf.Ready]: async () => {
     console.log("[API] API server ready");
 
     // Simulate processing some data through multiple slices
@@ -124,15 +121,13 @@ const apiSlice: ISlice = {
 
     // Execute the ProcessData event. The DatabaseConnect constraint does not
     // apply here, so this chain uses the default order: cache -> database -> api
-    const result = await loaf.execute(CustomEvents.ProcessData, "user-request-123", loaf);
+    const result = await useLoaf().execute<string>(CustomEvents.ProcessData, "user-request-123");
 
     console.log(`[API] Final result: "${result}"\n`);
-
-    return loaf;
   },
 
   // Final handler in the chain
-  [CustomEvents.ProcessData]: async (data: string, loaf: Loaf) => {
+  [CustomEvents.ProcessData]: async (data: string) => {
     console.log(`  [API] Sending response: "${data}"`);
     return data + " -> sent to client";
   }

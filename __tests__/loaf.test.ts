@@ -1,6 +1,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from "@jest/globals";
 import Loaf from "../src/loaf";
 import Slice from "../src/slice";
+import { useLoaf, useSlice } from "../src/context";
 import { createLogger } from "../src/utils/logger";
 import { ISlice, LoafEvent, Logger } from "../src/types/loaf";
 import { AdjacencyError } from "../src/utils/topo-graph";
@@ -19,7 +20,7 @@ describe('Loaf', () => {
       name: 'test',
       slices: [{
         name: "slice1",
-        [Loaf.Load]: async (loaf: Loaf, slice: ISlice) => {
+        [Loaf.Load]: async () => {
           l++;
         }
       }]
@@ -32,20 +33,17 @@ describe('Loaf', () => {
     const loaf = new Loaf({
       name: 'test', slices: [{
         name: "slice1",
-        [Loaf.Load]: async (loaf: Loaf) => {
+        [Loaf.Load]: async () => {
           l.push('load');
         },
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready');
-          return loaf;
         },
-        [Loaf.Shutdown]: async (loaf: Loaf) => {
+        [Loaf.Shutdown]: async () => {
           l.push('shutdown');
-          return loaf;
         }
       }]
     });
@@ -61,38 +59,32 @@ describe('Loaf', () => {
       name: 'test',
       slices: [{
         name: "test1",
-        [Loaf.Load]: async (loaf: Loaf) => {
+        [Loaf.Load]: async () => {
           l.push('load1');
         },
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready1');
-          return loaf;
         },
-        [Loaf.Shutdown]: async (loaf: Loaf) => {
+        [Loaf.Shutdown]: async () => {
           l.push('shutdown1');
-          return loaf;
         }
       }, {
         name: "test2",
         dependencies: ["test1"],
-        [Loaf.Load]: async (loaf: Loaf) => {
+        [Loaf.Load]: async () => {
           l.push('load2');
         },
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize2');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready2');
-          return loaf;
         },
-        [Loaf.Shutdown]: async (loaf: Loaf) => {
+        [Loaf.Shutdown]: async () => {
           l.push('shutdown2');
-          return loaf;
         }
       }]
     });
@@ -107,37 +99,31 @@ describe('Loaf', () => {
       slices: [{
         name: "test1",
         dependencies: ["test2"],
-        // [Loaf.Load]: async (loaf: Loaf, slice: ISlice) => {
+        // [Loaf.Load]: async () => {
         //   l.push('load1');
         // },
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready1');
-          return loaf;
         },
-        [Loaf.Shutdown]: async (loaf: Loaf) => {
+        [Loaf.Shutdown]: async () => {
           l.push('shutdown1');
-          return loaf;
         }
       }, {
         name: "test2",
-        // [Loaf.Load]: async (loaf: Loaf) => {
+        // [Loaf.Load]: async () => {
         //   l.push('load2');
         // },
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize2');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready2');
-          return loaf;
         },
-        [Loaf.Shutdown]: async (loaf: Loaf) => {
+        [Loaf.Shutdown]: async () => {
           l.push('shutdown2');
-          return loaf;
         }
       }]
     });
@@ -152,13 +138,11 @@ describe('Loaf', () => {
       slices: [{
         name: "test2",
         dependencies: ["test1"],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize2');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready2');
-          return loaf;
         }
       }, {
         name: "test3",
@@ -169,13 +153,11 @@ describe('Loaf', () => {
             after: ["test4"]
           }
         }],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize3');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready3');
-          return loaf;
         }
       }, {
         name: "test4",
@@ -186,24 +168,20 @@ describe('Loaf', () => {
             after: ["test3"],
           },
         }],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize4');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready4');
-          return loaf;
         }
       }, {
         name: "test1",
         dependencies: [],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
-          return loaf;
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready1');
-          return loaf;
         }
       }]
     });
@@ -248,22 +226,22 @@ describe('Loaf', () => {
       slices: [{
         name: "test1",
         dependencies: [],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
         }
       }, {
         name: "test2",
         dependencies: [],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize2');
         },
-        [Loaf.Ready]: async (loaf: Loaf) => {
+        [Loaf.Ready]: async () => {
           l.push('ready2');
         }
       }, {
         name: "test3",
         dependencies: [],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize3');
         },
       }]
@@ -285,10 +263,10 @@ describe('Loaf', () => {
       slices: [{
         name: "test1",
         dependencies: [],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
         },
-        ["warrgh"]: async (loaf: Loaf) => {
+        ["warrgh"]: async () => {
           l.push('warrgh');
         }
 
@@ -308,13 +286,13 @@ describe('Loaf', () => {
       slices: [{
         name: "test1",
         dependencies: [],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
         },
-        ["warrgh"]: async (loaf: Loaf) => {
+        ["warrgh"]: async () => {
           l.push('warrgh');
         },
-        ["warrgh2"]: async (loaf: Loaf) => {
+        ["warrgh2"]: async () => {
           l.push('warrgh2');
         }
 
@@ -335,13 +313,13 @@ describe('Loaf', () => {
       slices: [{
         name: "test1",
         dependencies: [],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
         },
-        ["warrgh"]: async (loaf: Loaf) => {
+        ["warrgh"]: async () => {
           l.push('warrgh');
         },
-        ["warrgh2"]: async (loaf: Loaf) => {
+        ["warrgh2"]: async () => {
           l.push('warrgh2');
         }
 
@@ -364,13 +342,13 @@ describe('Loaf', () => {
         name: "test1",
         dependencies: [],
         allow: ["warrgh"],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
         },
-        ["warrgh"]: async (loaf: Loaf) => {
+        ["warrgh"]: async () => {
           l.push('warrgh');
         },
-        ["warrgh2"]: async (loaf: Loaf) => {
+        ["warrgh2"]: async () => {
           l.push('warrgh2');
         }
 
@@ -393,15 +371,15 @@ describe('Loaf', () => {
         dependencies: [],
         allow: ["warrgh", "warrgh2"],
         ignore: ["warrgh2"],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
-          await loaf.execute("warrgh", loaf);
+          await useLoaf().execute("warrgh");
         },
-        ["warrgh"]: async (loaf: Loaf) => {
+        ["warrgh"]: async () => {
           l.push('warrgh');
-          await loaf.execute("warrgh2", loaf);
+          await useLoaf().execute("warrgh2");
         },
-        ["warrgh2"]: async (loaf: Loaf) => {
+        ["warrgh2"]: async () => {
           l.push('warrgh2');
         }
 
@@ -424,19 +402,19 @@ describe('Loaf', () => {
         name: "test1",
         dependencies: [],
         allow: ["warrgh", "warrgh2"],
-        [Loaf.Initialize]: async (loaf: Loaf) => {
+        [Loaf.Initialize]: async () => {
           l.push('initialize1');
-          await loaf.execute("warrgh", loaf);
+          await useLoaf().execute("warrgh");
         },
 
       }, {
         name: "test2",
         dependencies: [],
-        ["warrgh"]: async (loaf: Loaf) => {
+        ["warrgh"]: async () => {
           l.push('warrgh');
-          await loaf.execute("warrgh2", loaf);
+          await useLoaf().execute("warrgh2");
         },
-        ["warrgh2"]: async (loaf: Loaf) => {
+        ["warrgh2"]: async () => {
           l.push('warrgh2');
         }
       }]
@@ -510,32 +488,43 @@ describe("Loaf - positive", () => {
     expect(loaf.get("missing")).toBeUndefined();
   });
 
-  it("Load receives the loaf and the slice", async () => {
-    const load = jest.fn(async () => {});
-    const slice = { name: "a", [Loaf.Load]: load };
-    const loaf = new Loaf({ name: "t", slices: [slice] });
-    await loaf.load();
-    expect(load).toHaveBeenCalledWith(loaf, slice);
-  });
-
-  it("event handlers are called with the slice as `this` and last argument", async () => {
-    let self: any;
-    let lastArg: any;
+  it("Load runs with the loaf and slice in context and no arguments", async () => {
+    let args: any[] = [];
+    let seen: any = {};
     const slice = {
       name: "a",
-      [Loaf.Initialize]: async function (this: any, loaf: Loaf, ...rest: any[]) {
+      [Loaf.Load]: async (...rest: any[]) => {
+        args = rest;
+        seen = { loaf: useLoaf(), slice: useSlice() };
+      },
+    };
+    const loaf = new Loaf({ name: "t", slices: [slice] });
+    await loaf.load();
+    expect(args).toEqual([]);
+    expect(seen.loaf).toBe(loaf);
+    expect(seen.slice).toBe(slice);
+  });
+
+  it("lifecycle handlers get the slice as `this` and from useSlice(), with no arguments", async () => {
+    let self: any;
+    let args: any[] = [];
+    let fromContext: any;
+    const slice = {
+      name: "a",
+      [Loaf.Initialize]: async function (this: any, ...rest: any[]) {
         self = this;
-        lastArg = rest[rest.length - 1];
-        return loaf;
+        args = rest;
+        fromContext = useSlice();
       },
     };
     const loaf = new Loaf({ name: "t", slices: [slice] });
     await loaf.start();
     expect(self).toBe(slice);
-    expect(lastArg).toBe(slice);
+    expect(args).toEqual([undefined]);
+    expect(fromContext).toBe(slice);
   });
 
-  it("the value returned by Initialize is passed to the next slice", async () => {
+  it("lifecycle return values are ignored", async () => {
     const received: any[] = [];
     const loaf = new Loaf({
       name: "t",
@@ -547,30 +536,150 @@ describe("Loaf - positive", () => {
         dependencies: ["a"],
         [Loaf.Initialize]: async (value: any) => {
           received.push(value);
-          return value;
         },
       }],
     });
     await loaf.start();
-    expect(received).toEqual(["from-a"]);
+    expect(received).toEqual([undefined]);
+  });
+
+  it("each lifecycle handler sees its own slice", async () => {
+    const seen: string[] = [];
+    const loaf = new Loaf({
+      name: "t",
+      slices: ["a", "b", "c"].map((name) => ({
+        name,
+        [Loaf.Ready]: async () => { seen.push(useSlice<ISlice>().name); },
+      })),
+    });
+    await loaf.start();
+    expect(seen).toEqual(["a", "b", "c"]);
+  });
+
+  it("custom crumbs keep the data waterfall without appending the slice", async () => {
+    const calls: any[][] = [];
+    const loaf = new Loaf({
+      name: "t",
+      crumbNames: ["build"],
+      slices: [{
+        name: "a",
+        build: async (...args: any[]) => { calls.push(args); return `${args[0]}-a`; },
+      }, {
+        name: "b",
+        dependencies: ["a"],
+        build: async (...args: any[]) => { calls.push(args); return `${args[0]}-b`; },
+      }],
+    });
+    await loaf.load();
+    expect(await loaf.execute("build", "start", "extra")).toBe("start-a-b");
+    expect(calls).toEqual([["start", "extra"], ["start-a", "extra"]]);
+  });
+
+  it("the context survives awaits and timers inside a handler", async () => {
+    let seen: any = {};
+    const slice = {
+      name: "a",
+      [Loaf.Initialize]: async () => {
+        await new Promise((r) => setTimeout(r, 5));
+        const fromTimer = await new Promise((r) => setTimeout(() => r(useSlice()), 5));
+        seen = { loaf: useLoaf(), slice: fromTimer };
+      },
+    };
+    const loaf = new Loaf({ name: "t", slices: [slice] });
+    await loaf.start();
+    expect(seen.loaf).toBe(loaf);
+    expect(seen.slice).toBe(slice);
+  });
+
+  it("nested executes see the inner slice and restore the outer slice", async () => {
+    const seen: string[] = [];
+    const loaf = new Loaf({
+      name: "t",
+      crumbNames: ["inner"],
+      slices: [{
+        name: "outer",
+        [Loaf.Initialize]: async () => {
+          seen.push(`before:${useSlice<ISlice>().name}`);
+          await useLoaf().execute("inner");
+          seen.push(`after:${useSlice<ISlice>().name}`);
+        },
+      }, {
+        name: "inner-slice",
+        inner: async () => { seen.push(`inner:${useSlice<ISlice>().name}`); },
+      }],
+    });
+    await loaf.start();
+    expect(seen).toEqual(["before:outer", "inner:inner-slice", "after:outer"]);
+  });
+
+  it("all() runs each handler with its own slice", async () => {
+    const loaf = new Loaf({
+      name: "t",
+      crumbNames: ["who"],
+      slices: ["a", "b"].map((name) => ({
+        name,
+        who: async () => {
+          await new Promise((r) => setTimeout(r, name === "a" ? 10 : 0));
+          return useSlice<ISlice>().name;
+        },
+      })),
+    });
+    await loaf.load();
+    expect(await loaf.all("who", undefined)).toEqual(["a", "b"]);
+  });
+
+  it("concurrently started loaves each see their own loaf", async () => {
+    const seen = new Map<string, Loaf>();
+    const make = (name: string) => new Loaf({
+      name,
+      slices: [{
+        name: "s",
+        [Loaf.Initialize]: async () => {
+          await new Promise((r) => setTimeout(r, name === "one" ? 10 : 0));
+          seen.set(name, useLoaf());
+        },
+      }],
+    });
+    const one = make("one");
+    const two = make("two");
+    await Promise.all([one.start(), two.start()]);
+    expect(seen.get("one")).toBe(one);
+    expect(seen.get("two")).toBe(two);
+  });
+
+  it("buildSlice can use useLoaf() but has no slice context", async () => {
+    let fromContext: any;
+    let sliceError: any;
+    const loaf = new Loaf({
+      name: "t",
+      slices: [{
+        buildSlice: () => {
+          fromContext = useLoaf();
+          try { useSlice(); } catch (e) { sliceError = e; }
+          return { name: "built" };
+        },
+      }],
+    });
+    await loaf.load();
+    expect(fromContext).toBe(loaf);
+    expect(sliceError?.message).toBe("useSlice() must be called inside a slice handler");
   });
 
   it("builds slices from Slice subclasses", async () => {
     const calls: string[] = [];
     class MySlice extends Slice {
       constructor() {
-        super(undefined as any);
+        super();
         this.name = "my-slice";
       }
-      [LoafEvent.Initialize] = async <T extends Loaf>(loaf: T) => {
-        calls.push("init");
-        return loaf;
+      [LoafEvent.Initialize] = async () => {
+        calls.push(`init:${useSlice<ISlice>().name}`);
       };
     }
     const loaf = new Loaf({ name: "t", slices: [MySlice] });
     await loaf.start();
     expect(loaf.get<MySlice>("my-slice")).toBeInstanceOf(MySlice);
-    expect(calls).toEqual(["init"]);
+    expect(calls).toEqual(["init:my-slice"]);
   });
 
   it("builds slices from a buildSlice factory", async () => {
@@ -640,10 +749,10 @@ describe("Loaf - positive", () => {
       slices: [{
         name: "a",
         dependencies: [{ optional: { before: ["b"] } }],
-        [Loaf.Initialize]: async (loaf: Loaf) => { l.push("a"); return loaf; },
+        [Loaf.Initialize]: async () => { l.push("a"); },
       }, {
         name: "b",
-        [Loaf.Initialize]: async (loaf: Loaf) => { l.push("b"); return loaf; },
+        [Loaf.Initialize]: async () => { l.push("b"); },
       }],
     });
     await loaf.start();
@@ -677,10 +786,10 @@ describe("Loaf - positive", () => {
       slices: [{
         name: "a",
         dependencies: ["b"],
-        [Loaf.Shutdown]: async (loaf: Loaf) => { l.push("a"); return loaf; },
+        [Loaf.Shutdown]: async () => { l.push("a"); },
       }, {
         name: "b",
-        [Loaf.Shutdown]: async (loaf: Loaf) => { l.push("b"); return loaf; },
+        [Loaf.Shutdown]: async () => { l.push("b"); },
       }],
     });
     await loaf.start();
@@ -704,10 +813,10 @@ describe("Loaf - positive", () => {
       slices: [{
         name: "a",
         dependencies: [{ oneOf: ["b", "c"] }],
-        [Loaf.Initialize]: async (loaf: Loaf) => { l.push("a"); return loaf; },
+        [Loaf.Initialize]: async () => { l.push("a"); },
       }, {
         name: "c",
-        [Loaf.Initialize]: async (loaf: Loaf) => { l.push("c"); return loaf; },
+        [Loaf.Initialize]: async () => { l.push("c"); },
       }],
     });
     await loaf.start();
@@ -721,13 +830,13 @@ describe("Loaf - positive", () => {
       slices: [{
         name: "a",
         dependencies: [{ oneOf: ["b", "c"] }],
-        [Loaf.Initialize]: async (loaf: Loaf) => { l.push("a"); return loaf; },
+        [Loaf.Initialize]: async () => { l.push("a"); },
       }, {
         name: "b",
-        [Loaf.Initialize]: async (loaf: Loaf) => { l.push("b"); return loaf; },
+        [Loaf.Initialize]: async () => { l.push("b"); },
       }, {
         name: "c",
-        [Loaf.Initialize]: async (loaf: Loaf) => { l.push("c"); return loaf; },
+        [Loaf.Initialize]: async () => { l.push("c"); },
       }],
     });
     await loaf.start();
@@ -784,11 +893,11 @@ describe("Loaf - negative", () => {
       slices: [{
         name: "a",
         dependencies: [{ event: Loaf.Initialize, required: ["b"] }],
-        [Loaf.Initialize]: async (loaf: Loaf) => loaf,
+        [Loaf.Initialize]: async () => {},
       }, {
         name: "b",
         dependencies: [{ event: Loaf.Initialize, required: ["a"] }],
-        [Loaf.Initialize]: async (loaf: Loaf) => loaf,
+        [Loaf.Initialize]: async () => {},
       }],
     });
     await expect(loaf.load()).rejects.toThrow(AdjacencyError);
@@ -817,7 +926,7 @@ describe("Loaf - negative", () => {
 
   it("initialize calls UncaughtError handlers and rethrows", async () => {
     const logger = silentLogger();
-    const onError = jest.fn(async (loaf: Loaf) => loaf);
+    const onError = jest.fn(async () => {});
     const error = new Error("init failed");
     const loaf = new Loaf({
       name: "t",
@@ -830,12 +939,12 @@ describe("Loaf - negative", () => {
     });
     await loaf.load();
     await expect(loaf.initialize()).rejects.toBe(error);
-    expect(onError).toHaveBeenCalledWith(loaf, error, expect.anything());
+    expect(onError).toHaveBeenCalledWith(error);
     expect(logger.error).toHaveBeenCalled();
   });
 
   it("initialize stops later slices after a failure", async () => {
-    const later = jest.fn(async (loaf: Loaf) => loaf);
+    const later = jest.fn(async () => {});
     const loaf = new Loaf({
       name: "t",
       logger: silentLogger(),
@@ -879,7 +988,7 @@ describe("Loaf - negative", () => {
   });
 
   it("ready calls UncaughtError handlers and rethrows", async () => {
-    const onError = jest.fn(async (loaf: Loaf) => loaf);
+    const onError = jest.fn(async () => {});
     const error = new Error("ready failed");
     const loaf = new Loaf({
       name: "t",
@@ -891,7 +1000,7 @@ describe("Loaf - negative", () => {
       }],
     });
     await expect(loaf.start()).rejects.toBe(error);
-    expect(onError).toHaveBeenCalledWith(loaf, error, expect.anything());
+    expect(onError).toHaveBeenCalledWith(error);
   });
 
   it("ready rejects when the UncaughtError handler throws", async () => {
@@ -926,7 +1035,7 @@ describe("Loaf - negative", () => {
   });
 
   it("ignored crumbs are never executed for that slice", async () => {
-    const ignored = jest.fn(async (loaf: Loaf) => loaf);
+    const ignored = jest.fn(async () => {});
     const loaf = new Loaf({
       name: "t",
       slices: [{ name: "a", ignore: [Loaf.Initialize], [Loaf.Initialize]: ignored }],
@@ -937,7 +1046,7 @@ describe("Loaf - negative", () => {
   });
 
   it("disallowCrumb can remove a built in lifecycle event", async () => {
-    const ready = jest.fn(async (loaf: Loaf) => loaf);
+    const ready = jest.fn(async () => {});
     const loaf = new Loaf({ name: "t", slices: [{ name: "a", [Loaf.Ready]: ready }] });
     loaf.disallowCrumb(Loaf.Ready);
     await loaf.start();
@@ -952,5 +1061,110 @@ describe("Loaf - negative", () => {
     expect(loaf.crumbs["custom"]).toBeUndefined();
     await loaf.execute("custom", "start");
     expect(custom).not.toHaveBeenCalled();
+  });
+});
+
+describe("Loaf - error slice paths", () => {
+  it("annotates a nested error with the full slice path and keeps its identity", async () => {
+    const error = new TypeError("db down");
+    const loaf = new Loaf({
+      name: "t",
+      logger: silentLogger(),
+      crumbNames: ["db:connect"],
+      slices: [{
+        name: "api",
+        dependencies: ["database"],
+        [Loaf.Initialize]: async () => { await useLoaf().execute("db:connect"); },
+      }, {
+        name: "database",
+        "db:connect": async () => { throw error; },
+      }],
+    });
+    await loaf.load();
+    const caught: any = await loaf.initialize().catch((e) => e);
+    expect(caught).toBe(error);
+    expect(caught).toBeInstanceOf(TypeError);
+    expect(caught.message).toBe("db down [at loaf:init(api) > db:connect(database)]");
+    expect(caught.slicePath).toEqual([
+      { event: Loaf.Initialize, slice: "api" },
+      { event: "db:connect", slice: "database" },
+    ]);
+    expect(caught.stack.split("\n")[0]).toBe("TypeError: db down [at loaf:init(api) > db:connect(database)]");
+  });
+
+  it("annotates an error only once as it propagates", async () => {
+    const loaf = new Loaf({
+      name: "t",
+      crumbNames: ["one", "two"],
+      slices: [{
+        name: "a",
+        one: async () => useLoaf().execute("two"),
+      }, {
+        name: "b",
+        two: async () => { throw new Error("deep"); },
+      }],
+    });
+    await loaf.load();
+    const caught: any = await loaf.execute("one").catch((e) => e);
+    expect(caught.message).toBe("deep [at one(a) > two(b)]");
+  });
+
+  it("annotates synchronous throws from sync chains", async () => {
+    const loaf = new Loaf({
+      name: "t",
+      crumbNames: ["label"],
+      slices: [{ name: "a", label: () => { throw new Error("sync fail"); } }],
+    });
+    await loaf.load();
+    expect(() => loaf.sync("label", "x")).toThrow("sync fail [at label(a)]");
+  });
+
+  it("annotates errors thrown in Load", async () => {
+    const loaf = new Loaf({
+      name: "t",
+      slices: [{ name: "a", [Loaf.Load]: async () => { throw new Error("load failed"); } }],
+    });
+    await expect(loaf.load()).rejects.toThrow("load failed [at loaf:load(a)]");
+  });
+
+  it("UncaughtError handlers receive the annotated error", async () => {
+    const onError = jest.fn();
+    const loaf = new Loaf({
+      name: "t",
+      logger: silentLogger(),
+      slices: [{
+        name: "a",
+        [Loaf.Ready]: async () => { throw new Error("ready failed"); },
+        [Loaf.UncaughtError]: onError,
+      }],
+    });
+    await expect(loaf.start()).rejects.toThrow("ready failed [at loaf:rdy(a)]");
+    expect((onError.mock.calls[0][0] as any).slicePath).toEqual([{ event: Loaf.Ready, slice: "a" }]);
+  });
+
+  it("wraps primitive throws in an annotated Error", async () => {
+    const loaf = new Loaf({
+      name: "t",
+      crumbNames: ["x"],
+      slices: [{ name: "a", x: async () => { throw "plain string"; } }],
+    });
+    await loaf.load();
+    const caught: any = await loaf.execute("x").catch((e) => e);
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.message).toBe("plain string [at x(a)]");
+    expect(caught.cause).toBe("plain string");
+  });
+
+  it("leaves frozen errors untouched", async () => {
+    const error = Object.freeze(new Error("frozen"));
+    const loaf = new Loaf({
+      name: "t",
+      crumbNames: ["x"],
+      slices: [{ name: "a", x: async () => { throw error; } }],
+    });
+    await loaf.load();
+    const caught: any = await loaf.execute("x").catch((e) => e);
+    expect(caught).toBe(error);
+    expect(caught.message).toBe("frozen");
   });
 });

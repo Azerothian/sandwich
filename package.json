@@ -1,6 +1,6 @@
 {
   "name": "@azerothian/sandwich",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "main": "cjs/index.js",
   "types": "lib/index.d.ts",
   "module": "lib/index.js",
@@ -18,6 +18,9 @@
     "build:types": "tsc -p tsconfig.types.json --outDir publish/types",
     "build:copy-dts": "copyfiles -u 1 \"src/**/*.d.ts\" publish/lib",
     "build:cjs": "swc src --out-dir publish/cjs --config-file=.swcrc-cjs --strip-leading-paths -s"
+  },
+  "engines": {
+    "node": ">=16.4.0"
   },
   "files": [
     "**/*"

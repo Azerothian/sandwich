@@ -20,9 +20,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const counter: ISlice & { count: number } = {
   name: "counter",
   count: 0,
-  [Loaf.Initialize]: async function (this: { count: number }, loaf: Loaf) {
+  [Loaf.Initialize]: async function (this: { count: number }) {
     this.count++;
-    return loaf;
   },
 };
 

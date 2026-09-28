@@ -6,36 +6,37 @@
  * - start() rejecting with the original error (Initialize and Ready both rethrow)
  * - Cleaning up with shutdown() after a failed start
  * - Wiring UnhandledRejection manually (Loaf does not register it for you)
+ * - Using useSlice() to get the current slice from inside a handler
  */
 
 import Loaf from "../../src/loaf";
+import { useSlice } from "../../src/context";
 import { ISlice } from "../../src/types/loaf";
 
 const errorReporter: ISlice = {
   name: "error-reporter",
 
-  // Receives the loaf, the error and (last) this slice.
-  // Like every chained handler it must return the loaf for the next handler.
-  [Loaf.UncaughtError]: async (loaf: Loaf, error: Error) => {
+  // UncaughtError handlers receive just the error; lifecycle return values
+  // are ignored. useSlice() returns the current slice from inside a handler.
+  [Loaf.UncaughtError]: async (error: Error) => {
     console.log(`[ErrorReporter] reporting: ${error.message}`);
-    return loaf;
+    console.log(`[ErrorReporter] current slice via useSlice(): ${useSlice().name}`);
   },
 
-  [Loaf.UnhandledRejection]: async (loaf: Loaf, error: Error) => {
-    console.log(`[ErrorReporter] unhandled rejection: ${error.message}`);
-    return loaf;
+  // UnhandledRejection handlers receive just the reason.
+  [Loaf.UnhandledRejection]: async (reason: unknown) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    console.log(`[ErrorReporter] unhandled rejection: ${message}`);
   },
 };
 
 const database: ISlice = {
   name: "database",
-  [Loaf.Initialize]: async (loaf: Loaf) => {
+  [Loaf.Initialize]: async () => {
     console.log("[Database] connected");
-    return loaf;
   },
-  [Loaf.Shutdown]: async (loaf: Loaf) => {
+  [Loaf.Shutdown]: async () => {
     console.log("[Database] disconnected");
-    return loaf;
   },
 };
 
@@ -57,7 +58,7 @@ async function main() {
 
   // Loaf never listens for unhandled rejections itself - forward them explicitly.
   const onRejection = (reason: unknown) => {
-    loaf.execute(Loaf.UnhandledRejection, loaf, reason);
+    loaf.execute(Loaf.UnhandledRejection, reason);
   };
   process.on("unhandledRejection", onRejection);
 
@@ -83,9 +84,10 @@ main().catch(console.error);
  * === Error Handling Example ===
  *
  * [Database] connected
- * [ErrorReporter] reporting: port 3000 is already in use
+ * [ErrorReporter] reporting: port 3000 is already in use [at loaf:rdy(http-server)]
+ * [ErrorReporter] current slice via useSlice(): error-reporter
  *
- * [main] start() failed: port 3000 is already in use
+ * [main] start() failed: port 3000 is already in use [at loaf:rdy(http-server)]
  * [main] shutting down what was started...
  * [Database] disconnected
  *

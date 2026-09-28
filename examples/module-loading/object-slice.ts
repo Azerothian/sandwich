@@ -5,9 +5,8 @@ import { ISlice } from "../../src/types/loaf";
 const objectSlice: ISlice & { visits: number } = {
   name: "object-slice",
   visits: 0,
-  [Loaf.Initialize]: async (loaf: Loaf) => {
+  [Loaf.Initialize]: async () => {
     console.log("  [object-slice] initialized (loaded from a file path)");
-    return loaf;
   },
 };
 

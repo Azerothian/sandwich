@@ -5,6 +5,7 @@ import Loaf from "./loaf";
 import { createLogger } from "./utils/logger";
 import { v4 } from "uuid";
 import { AdjacencyError, TopologicalGraph } from "./utils/topo-graph";
+import { runInContext } from "./context";
 
 const logger = createLogger("kitchen");
 export async function buildToast(sliceData: any, loaf: Loaf, cwd: string, currentIdx: number, clone = false) : Promise<Toast> {
@@ -30,7 +31,7 @@ export async function buildToast(sliceData: any, loaf: Loaf, cwd: string, curren
   if (mod.prototype) {
     newMod = new mod();
   } else if (mod.buildSlice) {
-    newMod = mod.buildSlice(loaf);
+    newMod = runInContext({ loaf, path: [] }, () => mod.buildSlice(loaf));
   } else {
     if (clone) {
       newMod = Object.assign({}, mod);

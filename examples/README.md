@@ -94,6 +94,17 @@ This directory contains practical examples demonstrating how to use the Sandwich
 
 ---
 
+### 9. Hooks and Chain Control (`hooks-and-chain-control/`)
+**What it demonstrates:**
+- Slice hooks (`jam.hooks`, `loaf.addHook()`/`removeHook()`) with `before`/`after` functions, targeted via `sliceNames` or applied to every slice
+- Rewriting a handler's input (`before`) and its result (`after`)
+- Chain control with `useChain()`: `cancel()`, `skip()` and `redirect()` to a slice, an event, or a slice within another event
+- Errors annotated with the full path of slices that led to them (`error.slicePath`), including across a nested `execute()` call
+
+**Best for:** Cross-cutting concerns (logging, discounts, guards) and altering an event chain's flow from inside a handler
+
+---
+
 ## Running the Examples
 
 Each example is self-contained in its own directory with an `index.ts` file.
@@ -138,15 +149,24 @@ Control the execution order of slices:
 - `{ optional: { before: [...], after: [...] } }` - Same, but ignored if the slice is absent
 - Event-specific: `{ event: "custom:event", required: { before: ["slice1"] } }` - only changes that event's order
 
-### Handler Arguments
-Handlers are called as `(previousValue, ...extraArgs, slice)` with `this` bound to the slice.
-For lifecycle events the first handler receives the loaf; each later handler receives
-whatever the previous one returned. `Load` is the exception - it gets `(loaf, slice)` and its
-return value is ignored.
+### Execution Context
+Lifecycle handlers (`Loaf.Load`, `Loaf.Initialize`, `Loaf.Ready`, `Loaf.Shutdown`) take **no
+arguments** and their return values are **ignored**. Call `useLoaf()` to get the current Loaf
+and `useSlice()` to get the current slice from inside a handler (both throw if called outside
+one); `this` is still bound to the slice. `Loaf.UncaughtError` handlers receive just `(error)`,
+and `Loaf.UnhandledRejection` handlers receive just `(reason)`.
+
+Custom crumbs keep the data waterfall: handlers are called as `(previousValue, ...extraArgs)`
+with `this` bound to the slice - the slice is no longer appended as a trailing argument, so use
+`useLoaf()`/`useSlice()` if you need them.
+
+Inside a sequential chain (`execute()`, `condition()`, `sync()`) - including hooks that wrap
+their handlers - call `useChain()` to `cancel()`, `skip()` or `redirect()` the running chain. It
+throws outside those chains, e.g. inside `all()` or a `Load` handler. See example 9.
 
 ## Key Patterns
 
-1. **Always return loaf** from lifecycle events - the next slice receives your return value
+1. **Use useLoaf()/useSlice() instead of arguments** - get the loaf/slice from context rather than a handler parameter
 2. **Use descriptive names** for custom events (e.g., "database:connect")
 3. **Define event types** for better IDE autocomplete
 4. **Handle errors** - `start()` rejects if Initialize or Ready throws; call `shutdown()` to clean up

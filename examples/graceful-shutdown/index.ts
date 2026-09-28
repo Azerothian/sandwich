@@ -20,33 +20,33 @@ import { ISlice } from "../../src/types/loaf";
 const databaseSlice: ISlice = {
   name: "database",
 
+  // Lifecycle handlers take no arguments and their return values are
+  // ignored. Use useLoaf()/useSlice() if you need the loaf or slice.
+
   // Load event runs first - used for loading dependencies
-  [Loaf.Load]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Load]: async () => {
     console.log("[Database] Loading database drivers...");
   },
 
   // Initialize event - setup connections
-  [Loaf.Initialize]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Initialize]: async () => {
     console.log("[Database] Connecting to database...");
     // Simulate async connection
     await new Promise(resolve => setTimeout(resolve, 500));
     console.log("[Database] Connected successfully");
-    return loaf;
   },
 
   // Ready event - application is ready to use this slice
-  [Loaf.Ready]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Ready]: async () => {
     console.log("[Database] Database ready for queries");
-    return loaf;
   },
 
   // Shutdown event - cleanup resources
-  [Loaf.Shutdown]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Shutdown]: async () => {
     console.log("[Database] Closing database connections...");
     // Simulate async cleanup
     await new Promise(resolve => setTimeout(resolve, 300));
     console.log("[Database] All connections closed");
-    return loaf;
   }
 };
 
@@ -59,29 +59,26 @@ const cacheSlice: ISlice = {
   name: "cache",
   dependencies: ["database"], // Cache needs database to be ready
 
-  [Loaf.Load]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Load]: async () => {
     console.log("[Cache] Loading cache modules...");
   },
 
-  [Loaf.Initialize]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Initialize]: async () => {
     console.log("[Cache] Connecting to Redis...");
     await new Promise(resolve => setTimeout(resolve, 300));
     console.log("[Cache] Redis connected");
-    return loaf;
   },
 
-  [Loaf.Ready]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Ready]: async () => {
     console.log("[Cache] Cache is ready");
-    return loaf;
   },
 
-  [Loaf.Shutdown]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Shutdown]: async () => {
     console.log("[Cache] Flushing cache...");
     await new Promise(resolve => setTimeout(resolve, 200));
     console.log("[Cache] Disconnecting from Redis...");
     await new Promise(resolve => setTimeout(resolve, 200));
     console.log("[Cache] Cache shutdown complete");
-    return loaf;
   }
 };
 
@@ -94,30 +91,27 @@ const serverSlice: ISlice = {
   name: "server",
   dependencies: ["database", "cache"],
 
-  [Loaf.Load]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Load]: async () => {
     console.log("[Server] Loading HTTP server...");
   },
 
-  [Loaf.Initialize]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Initialize]: async () => {
     console.log("[Server] Starting HTTP server on port 3000...");
     await new Promise(resolve => setTimeout(resolve, 400));
     console.log("[Server] Server started");
-    return loaf;
   },
 
-  [Loaf.Ready]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Ready]: async () => {
     console.log("[Server] Server is accepting connections");
     console.log("[Server] Application fully ready! 🎉");
-    return loaf;
   },
 
-  [Loaf.Shutdown]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Shutdown]: async () => {
     console.log("[Server] Stopping new connections...");
     await new Promise(resolve => setTimeout(resolve, 200));
     console.log("[Server] Draining existing connections...");
     await new Promise(resolve => setTimeout(resolve, 500));
     console.log("[Server] Server shutdown complete");
-    return loaf;
   }
 };
 
@@ -129,25 +123,24 @@ const serverSlice: ISlice = {
 const errorHandlerSlice: ISlice = {
   name: "errorHandler",
 
-  [Loaf.Initialize]: async (loaf: Loaf, slice: ISlice) => {
+  [Loaf.Initialize]: async () => {
     console.log("[ErrorHandler] Setting up error handlers...");
-    return loaf;
   },
 
-  // Handle uncaught errors
-  [Loaf.UncaughtError]: async (loaf: Loaf, error: Error, slice: ISlice) => {
+  // Handle uncaught errors. UncaughtError handlers receive just the error.
+  [Loaf.UncaughtError]: async (error: Error) => {
     console.error("[ErrorHandler] ⚠️  Uncaught error:", error.message);
     // Log to error tracking service, send alerts, etc.
-    return loaf;
   },
 
   // Handle unhandled promise rejections. Loaf does not listen for
   // "unhandledRejection" itself - forward it with
-  // process.on("unhandledRejection", (e) => loaf.execute(Loaf.UnhandledRejection, loaf, e))
-  [Loaf.UnhandledRejection]: async (loaf: Loaf, error: Error, slice: ISlice) => {
-    console.error("[ErrorHandler] ⚠️  Unhandled rejection:", error.message);
+  // process.on("unhandledRejection", (reason) => loaf.execute(Loaf.UnhandledRejection, reason))
+  // UnhandledRejection handlers receive just the reason.
+  [Loaf.UnhandledRejection]: async (reason: unknown) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    console.error("[ErrorHandler] ⚠️  Unhandled rejection:", message);
     // Log to error tracking service, send alerts, etc.
-    return loaf;
   }
 };
 
@@ -219,9 +212,9 @@ main().catch(console.error);
  *
  * === Starting Graceful Shutdown Example ===
  *
- * [Database] Loading database drivers...
- * [Cache] Loading cache modules...
  * [Server] Loading HTTP server...
+ * [Cache] Loading cache modules...
+ * [Database] Loading database drivers...
  * [ErrorHandler] Setting up error handlers...
  * [Database] Connecting to database...
  * [Database] Connected successfully

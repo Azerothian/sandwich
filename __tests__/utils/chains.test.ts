@@ -1,5 +1,6 @@
 import { describe, expect, test, jest } from '@jest/globals';
 import Chains from '../../src/utils/chains';
+import { useChain } from '../../src/utils/chain-control';
 
 
 function createBindFunc(i: number) {
@@ -213,5 +214,211 @@ describe("utils:chains - negative", () => {
     chain.setOptions("test", { ignoreReturn: true });
     chain.push("test", async (o: string) => o);
     expect(() => chain.sync("test", "a")).toThrow("Cannot use sync with async functions");
+  });
+});
+
+function tagged(sliceName: string, fn: (...args: any[]) => any) {
+  return Object.assign(fn, { sliceName });
+}
+
+describe("utils:chains - chain control - positive", () => {
+  test('cancel with a value stops the chain and resolves with it', async () => {
+    const chain = new Chains();
+    const after = jest.fn();
+    chain.push("test", (o: string) => { useChain().cancel("stopped"); return `${o}1`; });
+    chain.push("test", after);
+    expect(await chain.execute("test", "a")).toBe("stopped");
+    expect(after).not.toHaveBeenCalled();
+  });
+  test('cancel without a value resolves with the current result', async () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().cancel(); return `${o}1`; });
+    chain.push("test", createBindFunc(2));
+    expect(await chain.execute("test", "a")).toBe("a1");
+  });
+  test('cancel(undefined) resolves with undefined', async () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().cancel(undefined); return `${o}1`; });
+    expect(await chain.execute("test", "a")).toBeUndefined();
+  });
+  test('destructured controls still work', async () => {
+    const chain = new Chains();
+    chain.push("test", () => { const { cancel } = useChain(); cancel("x"); });
+    expect(await chain.execute("test", "a")).toBe("x");
+  });
+  test('skip discards the current result and continues', async () => {
+    const chain = new Chains();
+    chain.push("test", createBindFunc(1));
+    chain.push("test", (o: string) => { useChain().skip(); return `${o}-ignored`; });
+    chain.push("test", createBindFunc(3));
+    expect(await chain.execute("test", "a")).toBe("a13");
+  });
+  test('redirect to a slice jumps ahead and passes the current result', async () => {
+    const chain = new Chains();
+    const seen: string[] = [];
+    chain.push("test", tagged("one", (o: string) => { seen.push("one"); useChain().redirect({ slice: "three" }); return `${o}1`; }));
+    chain.push("test", tagged("two", (o: string) => { seen.push("two"); return `${o}2`; }));
+    chain.push("test", tagged("three", (o: string) => { seen.push("three"); return `${o}3`; }));
+    expect(await chain.execute("test", "a")).toBe("a13");
+    expect(seen).toEqual(["one", "three"]);
+  });
+  test('redirect to an event hands off the current value and extra args', async () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().redirect({ event: "other" }); return `${o}1`; });
+    chain.push("test", createBindFunc(2));
+    chain.push("other", (o: string, extra: string) => `${o}-other-${extra}`);
+    expect(await chain.execute("test", "a", "x")).toBe("a1-other-x");
+  });
+  test('redirect to an event and slice starts that chain at the slice', async () => {
+    const chain = new Chains();
+    const seen: string[] = [];
+    chain.push("test", (o: string) => { useChain().redirect({ event: "other", slice: "y" }); return `${o}1`; });
+    chain.push("test", createBindFunc(2));
+    chain.push("other", tagged("x", (o: string) => { seen.push("x"); return `${o}-x`; }));
+    chain.push("other", tagged("y", (o: string, extra: string) => { seen.push("y"); return `${o}-y-${extra}`; }));
+    chain.push("other", tagged("z", (o: string) => { seen.push("z"); return `${o}-z`; }));
+    expect(await chain.execute("test", "a", "e")).toBe("a1-y-e-z");
+    expect(seen).toEqual(["y", "z"]);
+  });
+  test('redirect to the same event and an earlier slice restarts from there', async () => {
+    const chain = new Chains();
+    let loops = 0;
+    chain.push("test", tagged("a", (o: string) => `${o}a`));
+    chain.push("test", tagged("b", (o: string) => {
+      if (loops++ < 2) {
+        useChain().redirect({ event: "test", slice: "a" });
+      }
+      return `${o}b`;
+    }));
+    expect(await chain.execute("test", "")).toBe("ababab");
+  });
+  test('the redirected chain gets its own controller', async () => {
+    const chain = new Chains();
+    const seen: [string, number][] = [];
+    chain.push("test", () => { useChain().redirect({ event: "other", slice: "y" }); });
+    chain.push("other", tagged("x", (o: any) => o));
+    chain.push("other", tagged("y", (o: any) => { const c = useChain(); seen.push([c.eventName, c.index]); return o; }));
+    await chain.execute("test", "a");
+    expect(seen).toEqual([["other", 1]]);
+  });
+  test('sync redirects to an event and slice', () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().redirect({ event: "other", slice: "y" }); return `${o}1`; });
+    chain.push("other", tagged("x", (o: string) => `${o}-x`));
+    chain.push("other", tagged("y", (o: string) => `${o}-y`));
+    expect(chain.sync("test", "a")).toBe("a1-y");
+  });
+  test('redirect to an event with no functions returns the current value', async () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().redirect({ event: "missing" }); return `${o}1`; });
+    expect(await chain.execute("test", "a")).toBe("a1");
+  });
+  test('the last action in a step wins', async () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().cancel("x"); useChain().skip(); return `${o}1`; });
+    chain.push("test", createBindFunc(2));
+    expect(await chain.execute("test", "a")).toBe("a2");
+  });
+  test('the controller exposes the event name and index', async () => {
+    const chain = new Chains();
+    const seen: [string, number][] = [];
+    chain.push("test", (o: any) => { const c = useChain(); seen.push([c.eventName, c.index]); return o; });
+    chain.push("test", (o: any) => { const c = useChain(); seen.push([c.eventName, c.index]); return o; });
+    await chain.execute("test", "a");
+    expect(seen).toEqual([["test", 0], ["test", 1]]);
+  });
+  test('a nested execute gets its own controller', async () => {
+    const chain = new Chains();
+    chain.push("inner", () => { useChain().cancel("inner-cancelled"); });
+    chain.push("inner", () => "never");
+    chain.push("outer", async (o: string) => {
+      const inner = await chain.execute("inner", o);
+      expect(useChain().eventName).toBe("outer");
+      return `${o}-${inner}`;
+    });
+    chain.push("outer", (o: string) => `${o}-2`);
+    expect(await chain.execute("outer", "a")).toBe("a-inner-cancelled-2");
+  });
+  test('ignoreReturn chains return the start value when cancelled without a value', async () => {
+    const chain = new Chains();
+    chain.setOptions("test", { ignoreReturn: true });
+    chain.push("test", () => { useChain().cancel(); return "x"; });
+    expect(await chain.execute("test", "start")).toBe("start");
+  });
+  test('condition supports cancel and skip', async () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().skip(); return `${o}-skipped`; });
+    chain.push("test", (o: string) => { useChain().cancel(`${o}-cancelled`); return o; });
+    chain.push("test", createBindFunc(3));
+    expect(await chain.condition("test", async () => false, "a")).toBe("a-cancelled");
+  });
+  test('sync supports cancel, skip and redirect', () => {
+    const chain = new Chains();
+    chain.push("test", tagged("a", (o: string) => { useChain().redirect({ slice: "c" }); return `${o}1`; }));
+    chain.push("test", tagged("b", (o: string) => `${o}2`));
+    chain.push("test", tagged("c", (o: string) => { useChain().skip(); return `${o}3`; }));
+    chain.push("test", tagged("d", (o: string) => { useChain().cancel(`${o}!`); return o; }));
+    chain.push("test", tagged("e", (o: string) => `${o}5`));
+    expect(chain.sync("test", "a")).toBe("a1!");
+  });
+  test('sync redirects to another event synchronously', () => {
+    const chain = new Chains();
+    chain.push("test", (o: string) => { useChain().redirect({ event: "other" }); return `${o}1`; });
+    chain.push("other", (o: string) => `${o}-other`);
+    expect(chain.sync("test", "a")).toBe("a1-other");
+  });
+});
+
+describe("utils:chains - chain control - negative", () => {
+  test('useChain throws outside a chain', () => {
+    expect(() => useChain()).toThrow("useChain() is only available in sequential chains (execute, condition, sync)");
+  });
+  test('useChain throws inside all()', async () => {
+    const chain = new Chains();
+    chain.push("test", () => useChain());
+    await expect(chain.all("test", "a")).rejects.toThrow("useChain() is only available in sequential chains");
+  });
+  test('useChain inside all() does not see an outer chain', async () => {
+    const chain = new Chains();
+    chain.push("par", () => useChain());
+    chain.push("outer", async () => chain.all("par", undefined));
+    await expect(chain.execute("outer", undefined)).rejects.toThrow("useChain() is only available");
+  });
+  test('redirect to a slice that is not in the chain throws', async () => {
+    const chain = new Chains();
+    chain.push("test", tagged("one", () => { useChain().redirect({ slice: "missing" }); }));
+    await expect(chain.execute("test", "a"))
+      .rejects.toThrow('redirect target slice "missing" not found later in chain "test"');
+  });
+  test('redirect to an earlier slice throws', async () => {
+    const chain = new Chains();
+    chain.push("test", tagged("one", (o: any) => o));
+    chain.push("test", tagged("two", () => { useChain().redirect({ slice: "one" }); }));
+    await expect(chain.execute("test", "a"))
+      .rejects.toThrow('redirect target slice "one" not found later in chain "test"');
+  });
+  test('redirect needs a slice or an event', async () => {
+    const chain = new Chains();
+    chain.push("test", () => { useChain().redirect({} as any); });
+    await expect(chain.execute("test", "a")).rejects.toThrow("redirect() needs a { slice }, an { event } or both");
+  });
+  test('redirect to an event and slice throws when the slice is not in that chain', async () => {
+    const chain = new Chains();
+    chain.push("test", () => { useChain().redirect({ event: "other", slice: "missing" }); });
+    chain.push("other", tagged("x", (o: any) => o));
+    await expect(chain.execute("test", "a"))
+      .rejects.toThrow('redirect target slice "missing" not found in chain "other"');
+  });
+  test('redirect to an event and slice throws when the event has no functions', async () => {
+    const chain = new Chains();
+    chain.push("test", () => { useChain().redirect({ event: "missing", slice: "x" }); });
+    await expect(chain.execute("test", "a"))
+      .rejects.toThrow('redirect target slice "x" not found in chain "missing"');
+  });
+  test('sync redirect to an event and slice throws when the slice is missing', () => {
+    const chain = new Chains();
+    chain.push("test", () => { useChain().redirect({ event: "other", slice: "missing" }); });
+    chain.push("other", tagged("x", (o: any) => o));
+    expect(() => chain.sync("test", "a")).toThrow('redirect target slice "missing" not found in chain "other"');
   });
 });

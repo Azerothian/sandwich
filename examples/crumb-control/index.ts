@@ -37,9 +37,8 @@ const base: CrumbSlice = {
   [Crumbs.Debug]: async () => console.log("  [base] debug output (should never print)"),
   [Crumbs.Tax]: async (price: number) => price + 15,
   [Crumbs.Label]: (text: string) => text.toUpperCase(),
-  [Loaf.Ready]: async (loaf: Loaf) => {
+  [Loaf.Ready]: async () => {
     console.log("  [base] ready (should never print)");
-    return loaf;
   },
 };
 

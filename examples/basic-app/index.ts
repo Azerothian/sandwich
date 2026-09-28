@@ -16,22 +16,20 @@ import { ISlice } from "../../src/types/loaf";
 const loggerSlice: ISlice = {
   name: "logger",
 
-  // Initialize runs during startup
-  [Loaf.Initialize]: async (loaf: Loaf) => {
+  // Lifecycle handlers take no arguments and their return values are
+  // ignored. Use useLoaf()/useSlice() if you need the loaf or slice.
+  [Loaf.Initialize]: async () => {
     console.log("[Logger] Initializing logging system...");
-    return loaf;
   },
 
   // Ready runs after all slices are initialized
-  [Loaf.Ready]: async (loaf: Loaf) => {
+  [Loaf.Ready]: async () => {
     console.log("[Logger] Logger is ready!");
-    return loaf;
   },
 
   // Shutdown runs during cleanup
-  [Loaf.Shutdown]: async (loaf: Loaf) => {
+  [Loaf.Shutdown]: async () => {
     console.log("[Logger] Shutting down logger...");
-    return loaf;
   }
 };
 
@@ -44,20 +42,17 @@ const greeterSlice: ISlice = {
   // This means greeter's events will run AFTER logger's events
   dependencies: ["logger"],
 
-  [Loaf.Initialize]: async (loaf: Loaf) => {
+  [Loaf.Initialize]: async () => {
     console.log("[Greeter] Initializing greeter...");
-    return loaf;
   },
 
-  [Loaf.Ready]: async (loaf: Loaf) => {
+  [Loaf.Ready]: async () => {
     console.log("[Greeter] Hello from the Sandwich framework!");
     console.log("[Greeter] Greeter is ready!");
-    return loaf;
   },
 
-  [Loaf.Shutdown]: async (loaf: Loaf) => {
+  [Loaf.Shutdown]: async () => {
     console.log("[Greeter] Goodbye!");
-    return loaf;
   }
 };
 
@@ -111,6 +106,7 @@ main().catch(console.error);
  * [Greeter] Greeter is ready!
  *
  * === App is running ===
+ *
  *
  * === Shutting down ===
  *
